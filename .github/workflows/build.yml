@@ -35,6 +35,14 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
+      # Module hygiene: go.mod/go.sum must be tidy and the deps must match go.sum.
+      # OS-independent, so one leg is enough. `-diff` is a no-op unless drift exists.
+      - name: module hygiene (go mod tidy -diff + verify)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          go mod tidy -diff
+          go mod verify
+
       - run: go build ./...
       - run: go vet ./...
       - run: go test -race ./...

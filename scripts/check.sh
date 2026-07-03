@@ -7,6 +7,13 @@ set -eu
 cd "$(dirname "$0")/.."
 export GOTOOLCHAIN=local
 
+# Module hygiene: fail if go.mod/go.sum are not tidy, and verify the downloaded
+# dependencies match go.sum. `-diff` prints the needed changes and exits non-zero
+# without touching the files (Go 1.23+), so this is a pure gate under `set -e`.
+echo "→ go mod tidy -diff && go mod verify"
+go mod tidy -diff
+go mod verify
+
 echo "→ go build"
 go build ./...
 
