@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -41,7 +42,7 @@ func TestFinishNonSilentWritesEnvelope(t *testing.T) {
 }
 
 func TestRunWaitRejectsBadFlags(t *testing.T) {
-	defer resetWaitFlags()
+	withWaitFlags(t)
 	cases := []struct {
 		name              string
 		budget, ctx       int
@@ -65,14 +66,47 @@ func TestRunWaitRejectsBadFlags(t *testing.T) {
 }
 
 func TestRunWaitRejectsShortSHA(t *testing.T) {
-	defer resetWaitFlags()
-	resetWaitFlags()
+	withWaitFlags(t)
 	waitSHA = "1c27b08" // short sha — GitHub's head_sha filter needs the full 40
 	err := runWait(nil, nil)
 	var ce *core.Error
 	if !errors.As(err, &ce) || ce.Code != core.CodeUsage {
 		t.Fatalf("short --sha must be a usage error, got %v", err)
 	}
+}
+
+func TestInterruptOr(t *testing.T) {
+	boom := core.APIf("boom")
+	// Live ctx: the underlying error passes through untouched.
+	if got := interruptOr(context.Background(), boom); !errors.Is(got, boom) {
+		t.Errorf("live ctx: got %v, want the original error", got)
+	}
+	// Cancelled ctx: the error is replaced by a silent 130 interrupt.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	got := interruptOr(ctx, boom)
+	var ce *core.Error
+	if !errors.As(got, &ce) || ce.Code != core.CodeInterrupted || !ce.Silent {
+		t.Errorf("cancelled ctx: got %v, want a silent CodeInterrupted", got)
+	}
+}
+
+func TestRealClockSleepCancels(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// A minute-long sleep on a cancelled ctx must return ~immediately with the
+	// ctx error, not block — this is what makes `wait` interruptible.
+	if err := (realClock{}).Sleep(ctx, time.Minute); !errors.Is(err, context.Canceled) {
+		t.Errorf("Sleep on cancelled ctx = %v, want context.Canceled", err)
+	}
+}
+
+// withWaitFlags seeds valid wait flags and registers their reset as a t.Cleanup,
+// composing teardown through a helper instead of a per-test defer.
+func withWaitFlags(t *testing.T) {
+	t.Helper()
+	resetWaitFlags()
+	t.Cleanup(resetWaitFlags)
 }
 
 func resetWaitFlags() {

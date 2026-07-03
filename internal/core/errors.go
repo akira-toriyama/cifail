@@ -24,6 +24,12 @@ const (
 	// whether to resume (pending) or give up (timed_out). In `wait`, code 1 means
 	// the CI run went red (failure/cancelled).
 	CodeNotConcluded Code = 124
+
+	// CodeInterrupted is returned when the user interrupts a run with SIGINT
+	// (Ctrl-C) or SIGTERM: the first signal cancels in-flight work and exits with
+	// the conventional 128+signal code; a second Ctrl-C hard-kills. It is emitted
+	// silently (no stderr envelope) since the abort is the user's own doing.
+	CodeInterrupted Code = 130
 )
 
 // Error is cifail's structured error. On a non-zero exit the CLI prints it to

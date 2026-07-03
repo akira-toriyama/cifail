@@ -5,8 +5,11 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/akira-toriyama/cifail/internal/collect"
 	"github.com/akira-toriyama/cifail/internal/core"
@@ -30,11 +33,22 @@ var (
 // Execute builds the root command, runs it, and maps the result to cifail's
 // exit-code contract:
 //
-//	0 extracted / 1 no failing run / 2 usage|bad input / 3 API|IO
+//	0 extracted / 1 no failing run / 2 usage|bad input / 3 API|IO / 130 interrupted
 //
 // On a non-zero exit it prints {"error":{...}} to stderr, keeping stdout pure.
+//
+// A root context is derived from SIGINT/SIGTERM so a Ctrl-C cancels the in-flight
+// work (subprocesses and HTTP requests) rather than orphaning it; once cancelled
+// we restore the default signal disposition so a second Ctrl-C hard-kills instead
+// of being swallowed if graceful shutdown wedges.
 func Execute() int {
-	return finish(newRootCmd().Execute())
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+	return finish(newRootCmd().ExecuteContext(ctx))
 }
 
 // finish maps a returned error to the exit-code contract and renders the stderr
@@ -102,41 +116,42 @@ func runExtract(cmd *cobra.Command, args []string) error {
 	if flagContext < 0 {
 		return core.Usagef("--context must be >= 0, got %d", flagContext)
 	}
+	ctx := cmd.Context()
 
 	dir, err := os.Getwd()
 	if err != nil {
 		return core.APIf("getwd: %v", err)
 	}
 
-	owner, repo, err := gh.ResolveRepo(flagRepo, dir)
+	owner, repo, err := gh.ResolveRepo(ctx, flagRepo, dir)
 	if err != nil {
-		return err
+		return interruptOr(ctx, err)
 	}
 
-	target, err := resolveTarget(dir)
+	target, err := resolveTarget(ctx, dir)
 	if err != nil {
-		return err
+		return interruptOr(ctx, err)
 	}
 
-	client, err := gh.NewClient(owner, repo)
+	client, err := gh.NewClient(ctx, owner, repo)
 	if err != nil {
-		return err
+		return interruptOr(ctx, err)
 	}
 
 	cfg := extract.Default()
 	cfg.BudgetBytes = flagBudget
 	cfg.Context = flagContext
 
-	result, err := collect.Collect(client, target, cfg)
+	result, err := collect.Collect(ctx, client, target, cfg)
 	if err != nil {
-		return err
+		return interruptOr(ctx, err)
 	}
 	return renderResult(result)
 }
 
 // resolveTarget picks the run target from the flags, defaulting to the current
 // branch when none of --run/--pr/--branch is set.
-func resolveTarget(dir string) (gh.Target, error) {
+func resolveTarget(ctx context.Context, dir string) (gh.Target, error) {
 	switch {
 	case flagRun != 0:
 		return gh.Target{RunID: flagRun}, nil
@@ -145,12 +160,22 @@ func resolveTarget(dir string) (gh.Target, error) {
 	case flagBranch != "":
 		return gh.Target{Branch: flagBranch}, nil
 	default:
-		branch, err := gh.CurrentBranch(dir)
+		branch, err := gh.CurrentBranch(ctx, dir)
 		if err != nil {
 			return gh.Target{}, err
 		}
 		return gh.Target{Branch: branch}, nil
 	}
+}
+
+// interruptOr maps err to cifail's silent interrupt exit (130) when ctx was
+// cancelled by a signal — so a Ctrl-C during an in-flight request reads as a user
+// abort, not a spurious API error — and returns err unchanged otherwise.
+func interruptOr(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return &core.Error{Code: core.CodeInterrupted, Silent: true}
+	}
+	return err
 }
 
 // version flags. Like wait's --ndjson, the version subcommand owns its flag on

@@ -1,6 +1,7 @@
 package gh
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"time"
@@ -21,13 +22,13 @@ type RunSummary struct {
 
 // RunsForSHA lists every workflow run for the head sha (any status), paginating,
 // and returns their status snapshots.
-func (c *Client) RunsForSHA(sha string) ([]RunSummary, error) {
+func (c *Client) RunsForSHA(ctx context.Context, sha string) ([]RunSummary, error) {
 	var out []RunSummary
 	page := 1
 	for {
 		v := url.Values{"head_sha": {sha}, "per_page": {"100"}, "page": {fmt.Sprint(page)}}
 		var list apiRunList
-		if err := c.getJSON(c.repoPath("/actions/runs?"+v.Encode()), &list); err != nil {
+		if err := c.getJSON(ctx, c.repoPath("/actions/runs?"+v.Encode()), &list); err != nil {
 			return nil, err
 		}
 		for _, r := range list.Runs {

@@ -37,6 +37,12 @@ call/deadline — the JSON `conclusion` says `pending`=re-run vs `timed_out`); i
 verdict to **stdout** even on a nonzero exit (no stderr envelope) via
 `core.Error.Silent`.
 
+`130` is interrupted: `Execute` derives a root ctx from `signal.NotifyContext`
+(SIGINT/SIGTERM), threaded through `gh` (git/gh via `exec.CommandContext`, HTTP
+via `NewRequestWithContext`) and `wait`'s poll loop + injected `Clock.Sleep`, so a
+Ctrl-C cancels in-flight work and exits `130` (silent); a second Ctrl-C hard-kills.
+The pure `extract`/`model`/`wait` packages take ctx but still do no IO.
+
 ## Conventions
 
 - **Commits**: gitmoji + Conventional Commits; the Conventional *type* drives the

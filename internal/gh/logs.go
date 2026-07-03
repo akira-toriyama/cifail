@@ -3,6 +3,7 @@ package gh
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"regexp"
@@ -33,8 +34,8 @@ type LogArchive struct {
 
 // FetchLogs downloads and parses the run's log archive (one GET, following the
 // signed-URL redirect).
-func (c *Client) FetchLogs(runID int64) (*LogArchive, error) {
-	b, err := c.getRaw(c.repoPath(fmt.Sprintf("/actions/runs/%d/logs", runID)))
+func (c *Client) FetchLogs(ctx context.Context, runID int64) (*LogArchive, error) {
+	b, err := c.getRaw(ctx, c.repoPath(fmt.Sprintf("/actions/runs/%d/logs", runID)))
 	if err != nil {
 		return nil, err
 	}

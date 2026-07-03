@@ -107,15 +107,20 @@ returns just the run metadata and a `note` pointing at `html_url`.
 
 ### Exit codes
 
-| Code | Meaning                                             |
-| ---- | --------------------------------------------------- |
-| `0`  | a failing run was found and its logs were extracted |
-| `1`  | no failing run found for the target (a soft miss)   |
-| `2`  | bad usage / invalid input — fix the args            |
-| `3`  | GitHub API / network / IO failure                   |
+| Code  | Meaning                                             |
+| ----- | --------------------------------------------------- |
+| `0`   | a failing run was found and its logs were extracted |
+| `1`   | no failing run found for the target (a soft miss)   |
+| `2`   | bad usage / invalid input — fix the args            |
+| `3`   | GitHub API / network / IO failure                   |
+| `130` | interrupted (Ctrl-C) — see below                    |
 
 Errors are printed to **stderr** as `{"error":{"code","message"}}`, so a caller
 piping stdout to `jq` is unaffected.
+
+**Ctrl-C** cancels the in-flight work (the `git`/`gh` child and any HTTP request)
+and exits `130`, the conventional `128 + SIGINT`; a second Ctrl-C hard-kills. This
+matters most for `cifail wait`, which blocks for minutes.
 
 ## `cifail wait` — block until CI concludes
 
@@ -138,8 +143,10 @@ Flags: `--repo`, `--sha` (default: HEAD of cwd), `--timeout` (default `30m`),
 
 Exit codes: `0` green (or no runs triggered) · `1` red (CI failed/cancelled — a
 shell `&&` chain stops here) · `124` not concluded (`conclusion` is `pending`,
-re-run the same command to resume, or `timed_out`) · `2` usage · `3` API/IO. The
-verdict always goes to stdout as pure JSON, even on a nonzero exit.
+re-run the same command to resume, or `timed_out`) · `2` usage · `3` API/IO ·
+`130` interrupted (Ctrl-C). The verdict goes to stdout as pure JSON on `0`/`1`/
+`124` (even though `1`/`124` are nonzero); `2`/`3` use the stderr error envelope,
+and `130` prints nothing.
 
 A single call blocks at most ~9 minutes (under an agent shell's process limit);
 for longer runs it returns `pending` and you re-run `cifail wait` to continue —
