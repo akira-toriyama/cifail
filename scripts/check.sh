@@ -16,6 +16,9 @@ go vet ./...
 echo "→ go test -race"
 go test -race ./...
 
+echo "→ fuzz smoke (extract budget invariants, 5s)"
+go test -run='^$' -fuzz='^FuzzExtract$' -fuzztime=5s ./internal/extract
+
 if command -v golangci-lint >/dev/null 2>&1; then
   echo "→ golangci-lint"
   golangci-lint run ./...
