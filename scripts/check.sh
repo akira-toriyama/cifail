@@ -39,6 +39,7 @@ BIN="$(pwd)/bin/cifail"
 
 echo "→ smoke: version / --version / --help / usage errors"
 "$BIN" version >/dev/null
+"$BIN" version --ndjson >/dev/null # subcommand must own --ndjson (else exit 2)
 "$BIN" --version >/dev/null
 "$BIN" --help >/dev/null
 # a bad flag must exit 2 (usage), not crash
