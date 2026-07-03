@@ -11,7 +11,10 @@ cmd/cifail            → os.Exit(cli.Execute())
 internal/cli          → cobra adapter: flags, exit-code contract, JSON output
 internal/collect      → orchestrates gh → extract → model.Result
 internal/gh           → GitHub REST (reuses `gh auth token`); resolve run, jobs,
-                        annotations, log archive. IO lives here and ONLY here.
+                        annotations, log archive, runs-for-sha. IO lives here and
+                        ONLY here.
+internal/wait         → PURE poll/aggregate/exit logic for the `wait` subcommand;
+                        a gh Poller + a Clock are injected (no IO here)
 internal/extract      → PURE budget algorithm + severity ladder (no IO)
 internal/model        → JSON output shapes (dependency-free)
 internal/core         → exit-code contract + structured Error
@@ -27,6 +30,12 @@ internal/version      → build version/commit/date (ldflags-injected)
 `0` extracted · `1` no failing run (soft miss) · `2` usage/bad input · `3` API/IO.
 Non-zero exits print `{"error":{"code","message"}}` to **stderr**; stdout stays
 pure JSON.
+
+The `wait` subcommand extends this with `124` (runs not concluded within the
+call/deadline — the JSON `conclusion` says `pending`=re-run vs `timed_out`); in
+`wait`, `1` means the CI run went red (failure/cancelled). `wait` writes its
+verdict to **stdout** even on a nonzero exit (no stderr envelope) via
+`core.Error.Silent`.
 
 ## Conventions
 

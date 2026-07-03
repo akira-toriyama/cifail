@@ -117,6 +117,35 @@ returns just the run metadata and a `note` pointing at `html_url`.
 Errors are printed to **stderr** as `{"error":{"code","message"}}`, so a caller
 piping stdout to `jq` is unaffected.
 
+## `cifail wait` — block until CI concludes
+
+`git push && cifail wait` resolves the workflow runs of the pushed commit (HEAD
+by default; `--sha` to override), blocks until they finish, and prints a
+worst-of verdict. On red it embeds each failing step's budgeted excerpts — the
+same shape as the extract command, under `runs[].jobs`.
+
+```console
+$ git push && cifail wait --ndjson
+{"sha":"1c27b08","status":"completed","conclusion":"failure","elapsed_s":312,
+ "runs":[{"id":42,"name":"ci","status":"completed","conclusion":"failure",
+          "jobs":[{"name":"build","failed_steps":[{"name":"go test",
+                   "excerpts":[{"start_line":40,"reason":"match","lines":["--- FAIL ..."]}]}]}]}],
+ "budget":{"limit_bytes":16384,"used_bytes":5100,"omitted_lines":40}}
+```
+
+Flags: `--repo`, `--sha` (default: HEAD of cwd), `--timeout` (default `30m`),
+`--interval` (default `10s`), `--budget-bytes`, `--context`, `--ndjson`.
+
+Exit codes: `0` green (or no runs triggered) · `1` red (CI failed/cancelled — a
+shell `&&` chain stops here) · `124` not concluded (`conclusion` is `pending`,
+re-run the same command to resume, or `timed_out`) · `2` usage · `3` API/IO. The
+verdict always goes to stdout as pure JSON, even on a nonzero exit.
+
+A single call blocks at most ~9 minutes (under an agent shell's process limit);
+for longer runs it returns `pending` and you re-run `cifail wait` to continue —
+`elapsed_s` is measured from the run's start, so it stays accurate across
+re-runs.
+
 ## Development
 
 ```sh
