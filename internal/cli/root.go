@@ -153,14 +153,19 @@ func resolveTarget(dir string) (gh.Target, error) {
 	}
 }
 
+// version flags. Like wait's --ndjson, the version subcommand owns its flag on
+// its own flagset: root's --ndjson is a LOCAL (not persistent) flag, so a shared
+// one would not reach this subcommand — `cifail version --ndjson` would error.
+var versionNDJSON bool
+
 func newVersionCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print the cifail version",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			info := version.Resolve()
-			if flagNDJSON {
+			if versionNDJSON {
 				printCompact(info)
 				return nil
 			}
@@ -168,4 +173,6 @@ func newVersionCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&versionNDJSON, "ndjson", false, "emit compact single-line JSON instead of pretty JSON")
+	return cmd
 }
