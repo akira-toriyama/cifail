@@ -18,6 +18,12 @@ const (
 	CodeNoFailure Code = 1 // no failing run found for the target (a soft miss, not an error)
 	CodeUsage     Code = 2 // bad usage or invalid input — fix the args, do not retry
 	CodeAPI       Code = 3 // GitHub API / network / IO failure
+
+	// CodeNotConcluded is used by the `wait` subcommand only: the commit's runs
+	// were not terminal within the call/deadline. The JSON conclusion field says
+	// whether to resume (pending) or give up (timed_out). In `wait`, code 1 means
+	// the CI run went red (failure/cancelled).
+	CodeNotConcluded Code = 124
 )
 
 // Error is cifail's structured error. On a non-zero exit the CLI prints it to
@@ -30,6 +36,9 @@ type Error struct {
 	// message alone isn't enough to act on. Rendered as "details" in the
 	// envelope when non-nil.
 	Details any
+	// Silent suppresses the stderr error envelope in the CLI's Execute — used by
+	// `wait`, which prints its verdict to stdout and needs only a nonzero exit.
+	Silent bool
 }
 
 func (e *Error) Error() string { return e.Msg }

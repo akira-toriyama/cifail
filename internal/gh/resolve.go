@@ -3,6 +3,7 @@ package gh
 import (
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/akira-toriyama/cifail/internal/core"
 	"github.com/akira-toriyama/cifail/internal/model"
@@ -19,15 +20,16 @@ type Target struct {
 
 // apiRun is the subset of a workflow-run object cifail needs.
 type apiRun struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	Conclusion string `json:"conclusion"`
-	Event      string `json:"event"`
-	HeadBranch string `json:"head_branch"`
-	HeadSHA    string `json:"head_sha"`
-	RunAttempt int    `json:"run_attempt"`
-	HTMLURL    string `json:"html_url"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Status       string    `json:"status"`
+	Conclusion   string    `json:"conclusion"`
+	Event        string    `json:"event"`
+	HeadBranch   string    `json:"head_branch"`
+	HeadSHA      string    `json:"head_sha"`
+	RunAttempt   int       `json:"run_attempt"`
+	HTMLURL      string    `json:"html_url"`
+	RunStartedAt time.Time `json:"run_started_at"`
 }
 
 type apiRunList struct {
