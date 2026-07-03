@@ -39,6 +39,14 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 
+      # Short exploratory fuzz of the extract budget invariants (no-panic,
+      # used<=budget, well-formed excerpts). The seed corpus runs above under
+      # -race; this explores new inputs. Ubuntu only — the algorithm is
+      # OS-independent, so one leg is enough.
+      - name: fuzz smoke (extract)
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -run='^$' -fuzz='^FuzzExtract$' -fuzztime=15s ./internal/extract
+
       - name: smoke test
         run: |
           go build -o /tmp/cifail ./cmd/cifail
