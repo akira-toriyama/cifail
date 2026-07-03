@@ -81,3 +81,30 @@ type Budget struct {
 	UsedBytes    int `json:"used_bytes"`
 	OmittedLines int `json:"omitted_lines"` // total across all steps
 }
+
+// Verdict is the JSON `cifail wait` prints: the aggregated outcome of a commit's
+// workflow runs. Status is completed (a terminal verdict) or in_progress (we
+// bailed at the deadline / per-call ceiling). Conclusion is one of success,
+// failure, cancelled, pending, timed_out, no_runs — the caller's exit code and
+// resume decision come from it.
+type Verdict struct {
+	SHA        string       `json:"sha"`
+	Status     string       `json:"status"`
+	Conclusion string       `json:"conclusion"`
+	ElapsedS   int          `json:"elapsed_s"`
+	Runs       []RunOutcome `json:"runs"`
+	Budget     Budget       `json:"budget"`
+	Note       string       `json:"note,omitempty"`
+}
+
+// RunOutcome summarises one workflow run in a Verdict. Jobs is populated only for
+// a failing run (conclusion=="failure"), reusing the extract-mode Job shape.
+type RunOutcome struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	Event      string `json:"event,omitempty"`
+	HTMLURL    string `json:"html_url,omitempty"`
+	Jobs       []Job  `json:"jobs,omitempty"`
+}
