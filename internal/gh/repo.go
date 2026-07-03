@@ -62,6 +62,19 @@ func CurrentBranch(dir string) (string, error) {
 	return branch, nil
 }
 
+// CurrentSHA returns the full HEAD commit sha in dir.
+func CurrentSHA(dir string) (string, error) {
+	out, err := gitOutput(dir, "rev-parse", "HEAD")
+	if err != nil {
+		return "", core.Usagef("could not resolve HEAD in %q (%v); pass --sha", dir, err)
+	}
+	sha := strings.TrimSpace(out)
+	if sha == "" {
+		return "", core.Usagef("empty HEAD in %q; pass --sha", dir)
+	}
+	return sha, nil
+}
+
 // gitOutput runs `git -C dir <args...>` and returns trimmed stdout.
 func gitOutput(dir string, args ...string) (string, error) {
 	full := append([]string{"-C", dir}, args...)
