@@ -64,7 +64,19 @@ func TestRunWaitRejectsBadFlags(t *testing.T) {
 	}
 }
 
+func TestRunWaitRejectsShortSHA(t *testing.T) {
+	defer resetWaitFlags()
+	resetWaitFlags()
+	waitSHA = "1c27b08" // short sha — GitHub's head_sha filter needs the full 40
+	err := runWait(nil, nil)
+	var ce *core.Error
+	if !errors.As(err, &ce) || ce.Code != core.CodeUsage {
+		t.Fatalf("short --sha must be a usage error, got %v", err)
+	}
+}
+
 func resetWaitFlags() {
 	waitBudget, waitContext = 4096, 3
 	waitTimeout, waitInterval = time.Minute, time.Second
+	waitSHA = ""
 }

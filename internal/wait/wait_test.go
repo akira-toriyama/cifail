@@ -193,6 +193,45 @@ func TestPollErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestTransientEmptyAfterRunsDoesNotFalseNoRuns(t *testing.T) {
+	// Runs appear (in_progress), then a poll returns empty (GitHub list
+	// eventual-consistency). Must NOT read as no_runs/green; keep waiting and hit
+	// the per-call ceiling.
+	o := opts()
+	o.StartupGrace = 30 * time.Second
+	o.MaxBlock = 100 * time.Second
+	p := &fakePoller{polls: [][]RunState{{running(1, "ci")}, {}}} // then empty forever
+	v, err := Run(p, newClock(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Conclusion == "no_runs" {
+		t.Fatalf("transient empty after seeing runs must not be no_runs: %+v", v)
+	}
+	if v.Conclusion != "pending" {
+		t.Fatalf("want pending, got %+v", v)
+	}
+}
+
+func TestTimeoutMeasuredFromIncompleteRun(t *testing.T) {
+	// An earlier chain leg completed long ago; a later leg is still running from
+	// ~now. The deadline must track the running leg, not fire off the old leg's
+	// start.
+	oldDone := RunState{ID: 1, Name: "build", Status: "completed", Conclusion: "success",
+		StartedAt: epoch.Add(-40 * time.Minute)}
+	later := RunState{ID: 2, Name: "release", Status: "in_progress", StartedAt: epoch}
+	laterDone := RunState{ID: 2, Name: "release", Status: "completed", Conclusion: "success", StartedAt: epoch}
+	o := opts() // Timeout 300s — old leg is 40m old, running leg is 0s old
+	p := &fakePoller{polls: [][]RunState{{oldDone, later}, {oldDone, laterDone}}}
+	v, err := Run(p, newClock(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Conclusion != "success" {
+		t.Fatalf("must not time out on the old completed leg; got %+v", v)
+	}
+}
+
 func TestQueuedRunDoesNotFalseTimeout(t *testing.T) {
 	// A queued run has a zero StartedAt; the overall deadline must not fire off a
 	// bogus huge elapsed. It should keep polling and hit the per-call ceiling.

@@ -46,7 +46,7 @@ func newWaitCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&waitRepo, "repo", "", "target repository as owner/repo (default: the git origin of the working dir)")
-	f.StringVar(&waitSHA, "sha", "", "commit sha to wait on (default: HEAD of the working dir)")
+	f.StringVar(&waitSHA, "sha", "", "full commit sha to wait on (default: HEAD of the working dir)")
 	f.DurationVar(&waitTimeout, "timeout", wait.DefaultTimeout, "overall deadline for the runs to finish")
 	f.DurationVar(&waitInterval, "interval", wait.DefaultInterval, "how often to poll run status")
 	f.IntVar(&waitBudget, "budget-bytes", extract.Default().BudgetBytes, "byte budget for the kept log excerpts (per failing run)")
@@ -67,6 +67,11 @@ func runWait(cmd *cobra.Command, args []string) error {
 	}
 	if waitInterval <= 0 {
 		return core.Usagef("--interval must be positive, got %s", waitInterval)
+	}
+	// GitHub's head_sha run filter matches only the full 40-char sha; a short one
+	// silently returns zero runs, which would read as a false green (no_runs).
+	if waitSHA != "" && !isFullSHA(waitSHA) {
+		return core.Usagef("--sha must be a full 40-character commit sha, got %q (omit --sha to use HEAD)", waitSHA)
 	}
 
 	dir, err := os.Getwd()
@@ -131,6 +136,19 @@ func (p waitPoller) RunsForSHA(sha string) ([]wait.RunState, error) {
 
 func (p waitPoller) Excerpts(runID int64) (*model.Result, error) {
 	return collect.Collect(p.c, gh.Target{RunID: runID}, p.cfg)
+}
+
+// isFullSHA reports whether s is a full 40-character hexadecimal commit sha.
+func isFullSHA(s string) bool {
+	if len(s) != 40 {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
 
 // realClock is the production Clock.

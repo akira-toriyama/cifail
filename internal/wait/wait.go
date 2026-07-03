@@ -57,32 +57,43 @@ type Options struct {
 // and returns the assembled Verdict. Poller (API/IO) errors propagate unchanged.
 func Run(p Poller, clk Clock, o Options) (model.Verdict, error) {
 	callStart := clk.Now()
+	seenRuns := false
 	for {
 		runs, err := p.RunsForSHA(o.SHA)
 		if err != nil {
 			return model.Verdict{}, err
 		}
+		now := clk.Now()
 		if len(runs) == 0 {
-			if clk.Now().Sub(callStart) >= o.StartupGrace {
+			// Only conclude no_runs before we have ever seen a run for this sha; a
+			// transient empty list after runs appeared must not read as green.
+			if !seenRuns && now.Sub(callStart) >= o.StartupGrace {
 				return model.Verdict{SHA: o.SHA, Status: "completed", Conclusion: "no_runs",
 					Note: "no workflow runs found for this sha (nothing triggered on this event, or the push has not registered yet)"}, nil
 			}
-			clk.Sleep(o.Interval)
-			continue
+		} else {
+			seenRuns = true
+			if allCompleted(runs) {
+				return terminalVerdict(p, o.SHA, runs, elapsedS(clk, earliestStart(runs)))
+			}
+			// The deadline measures how long the still-unfinished runs have been
+			// going — not legs that already completed (e.g. an earlier stage of a
+			// workflow chain), whose old start would time us out prematurely. A
+			// not-yet-started (queued, zero StartedAt) run leaves it to MaxBlock.
+			if ws := earliestIncompleteStart(runs); !ws.IsZero() && now.Sub(ws) >= o.Timeout {
+				return pendingVerdict(o.SHA, "timed_out", runs, elapsedS(clk, earliestStart(runs))), nil
+			}
 		}
-		start := earliestStart(runs)
-		if allCompleted(runs) {
-			return terminalVerdict(p, o.SHA, runs, elapsedS(clk, start))
+		if now.Sub(callStart) >= o.MaxBlock {
+			return pendingVerdict(o.SHA, "pending", runs, elapsedS(clk, earliestStart(runs))), nil
 		}
-		// Honor the overall deadline only once a run has actually started — queued
-		// runs have a zero StartedAt, and Now-zero would be a huge (false) elapsed.
-		if !start.IsZero() && clk.Now().Sub(start) >= o.Timeout {
-			return pendingVerdict(o.SHA, "timed_out", runs, elapsedS(clk, start)), nil
+		// Never sleep past the per-call ceiling, or a large --interval would let
+		// the shell's 600s kill land before we return pending.
+		d := o.Interval
+		if rem := o.MaxBlock - now.Sub(callStart); rem < d {
+			d = rem
 		}
-		if clk.Now().Sub(callStart) >= o.MaxBlock {
-			return pendingVerdict(o.SHA, "pending", runs, elapsedS(clk, start)), nil
-		}
-		clk.Sleep(o.Interval)
+		clk.Sleep(d)
 	}
 }
 
@@ -101,6 +112,21 @@ func earliestStart(runs []RunState) time.Time {
 	var min time.Time
 	for _, r := range runs {
 		if r.StartedAt.IsZero() {
+			continue
+		}
+		if min.IsZero() || r.StartedAt.Before(min) {
+			min = r.StartedAt
+		}
+	}
+	return min
+}
+
+// earliestIncompleteStart is earliestStart restricted to runs that have not yet
+// completed — the ones the deadline is actually waiting on.
+func earliestIncompleteStart(runs []RunState) time.Time {
+	var min time.Time
+	for _, r := range runs {
+		if r.Status == "completed" || r.StartedAt.IsZero() {
 			continue
 		}
 		if min.IsZero() || r.StartedAt.Before(min) {
