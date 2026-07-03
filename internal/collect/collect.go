@@ -4,6 +4,8 @@
 package collect
 
 import (
+	"context"
+
 	"github.com/akira-toriyama/cifail/internal/extract"
 	"github.com/akira-toriyama/cifail/internal/gh"
 	"github.com/akira-toriyama/cifail/internal/model"
@@ -12,14 +14,15 @@ import (
 // Collect resolves the target's failing run and returns the assembled result.
 // A soft miss (no failing run) surfaces as a core.CodeNoFailure error from the
 // gh client; a failed run with no jobs (a workflow-file syntax error) returns a
-// result carrying only run metadata and a Note pointing at html_url.
-func Collect(c *gh.Client, t gh.Target, cfg extract.Config) (*model.Result, error) {
-	run, err := c.ResolveRun(t)
+// result carrying only run metadata and a Note pointing at html_url. Each gh
+// call is bound to ctx, so an interrupt aborts an in-flight extraction.
+func Collect(ctx context.Context, c *gh.Client, t gh.Target, cfg extract.Config) (*model.Result, error) {
+	run, err := c.ResolveRun(ctx, t)
 	if err != nil {
 		return nil, err
 	}
 
-	failedJobs, err := c.FailedJobs(run.ID)
+	failedJobs, err := c.FailedJobs(ctx, run.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +38,7 @@ func Collect(c *gh.Client, t gh.Target, cfg extract.Config) (*model.Result, erro
 		return result, nil
 	}
 
-	archive, err := c.FetchLogs(run.ID)
+	archive, err := c.FetchLogs(ctx, run.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -89,10 +92,17 @@ func Collect(c *gh.Client, t gh.Target, cfg extract.Config) (*model.Result, erro
 	// first failed step so the caller sees the matcher's finding alongside the
 	// excerpts.
 	for ji, fj := range failedJobs {
-		anns := c.Annotations(fj.ID)
+		anns := c.Annotations(ctx, fj.ID)
 		if len(anns) > 0 && len(jobs[ji].FailedSteps) > 0 {
 			jobs[ji].FailedSteps[0].Annotations = anns
 		}
+	}
+
+	// Annotations is best-effort and swallows its errors, so a Ctrl-C during that
+	// loop would otherwise slip through as a "successful" result and exit 0. Surface
+	// the cancellation here so an interrupt still maps to the silent 130 exit.
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	result.Jobs = jobs

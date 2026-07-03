@@ -1,6 +1,7 @@
 package wait
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -11,12 +12,27 @@ import (
 
 var epoch = time.Date(2026, 7, 3, 0, 0, 0, 0, time.UTC)
 
-// fakeClock advances Now by each Sleep; Now starts at epoch (no wall clock).
-type fakeClock struct{ t time.Time }
+// fakeClock advances Now by each Sleep; Now starts at epoch (no wall clock). Sleep
+// honors ctx cancellation (returning its error) so the cancellation path is
+// exercised without a real clock. An optional onSleep hook fires each Sleep, so a
+// test can inject a cancel between polls.
+type fakeClock struct {
+	t       time.Time
+	onSleep func()
+}
 
-func newClock() *fakeClock                 { return &fakeClock{t: epoch} }
-func (c *fakeClock) Now() time.Time        { return c.t }
-func (c *fakeClock) Sleep(d time.Duration) { c.t = c.t.Add(d) }
+func newClock() *fakeClock          { return &fakeClock{t: epoch} }
+func (c *fakeClock) Now() time.Time { return c.t }
+func (c *fakeClock) Sleep(ctx context.Context, d time.Duration) error {
+	if c.onSleep != nil {
+		c.onSleep()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	c.t = c.t.Add(d)
+	return nil
+}
 
 // fakePoller returns scripted run states per poll (last entry repeats) and canned
 // excerpts per run id.
@@ -27,7 +43,7 @@ type fakePoller struct {
 	pollErr  error
 }
 
-func (p *fakePoller) RunsForSHA(string) ([]RunState, error) {
+func (p *fakePoller) RunsForSHA(context.Context, string) ([]RunState, error) {
 	if p.pollErr != nil {
 		return nil, p.pollErr
 	}
@@ -37,7 +53,9 @@ func (p *fakePoller) RunsForSHA(string) ([]RunState, error) {
 	}
 	return r, nil
 }
-func (p *fakePoller) Excerpts(id int64) (*model.Result, error) { return p.excerpts[id], nil }
+func (p *fakePoller) Excerpts(_ context.Context, id int64) (*model.Result, error) {
+	return p.excerpts[id], nil
+}
 
 func opts() Options {
 	return Options{SHA: "sha", Timeout: 300 * time.Second, Interval: 10 * time.Second,
@@ -52,7 +70,7 @@ func running(id int64, name string) RunState {
 
 func TestGreen(t *testing.T) {
 	p := &fakePoller{polls: [][]RunState{{completed(1, "ci", "success"), completed(2, "lint", "success")}}}
-	v, err := Run(p, newClock(), opts())
+	v, err := Run(context.Background(), p, newClock(), opts())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +95,7 @@ func TestRedEmbedsExcerpts(t *testing.T) {
 			Budget: model.Budget{LimitBytes: 8192, UsedBytes: 500, OmittedLines: 3},
 		}},
 	}
-	v, err := Run(p, newClock(), opts())
+	v, err := Run(context.Background(), p, newClock(), opts())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +135,7 @@ func TestWorstOf(t *testing.T) {
 					p.excerpts[r.ID] = &model.Result{}
 				}
 			}
-			v, err := Run(p, newClock(), opts())
+			v, err := Run(context.Background(), p, newClock(), opts())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -132,7 +150,7 @@ func TestPending(t *testing.T) {
 	o := opts()
 	o.MaxBlock = 50 * time.Second
 	p := &fakePoller{polls: [][]RunState{{running(1, "ci")}}}
-	v, err := Run(p, newClock(), o)
+	v, err := Run(context.Background(), p, newClock(), o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +166,7 @@ func TestTimedOut(t *testing.T) {
 	o := opts()
 	o.Timeout = 30 * time.Second
 	p := &fakePoller{polls: [][]RunState{{running(1, "ci")}}}
-	v, err := Run(p, newClock(), o)
+	v, err := Run(context.Background(), p, newClock(), o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +182,7 @@ func TestNoRuns(t *testing.T) {
 	o := opts()
 	o.StartupGrace = 30 * time.Second
 	p := &fakePoller{polls: [][]RunState{{}}}
-	v, err := Run(p, newClock(), o)
+	v, err := Run(context.Background(), p, newClock(), o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +193,7 @@ func TestNoRuns(t *testing.T) {
 
 func TestRunsAppearAfterGrace(t *testing.T) {
 	p := &fakePoller{polls: [][]RunState{{}, {completed(1, "ci", "success")}}}
-	v, err := Run(p, newClock(), opts())
+	v, err := Run(context.Background(), p, newClock(), opts())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +204,7 @@ func TestRunsAppearAfterGrace(t *testing.T) {
 
 func TestPollErrorPropagates(t *testing.T) {
 	p := &fakePoller{pollErr: core.APIf("boom")}
-	_, err := Run(p, newClock(), opts())
+	_, err := Run(context.Background(), p, newClock(), opts())
 	var ce *core.Error
 	if !errors.As(err, &ce) || ce.Code != core.CodeAPI {
 		t.Fatalf("got %v, want CodeAPI", err)
@@ -201,7 +219,7 @@ func TestTransientEmptyAfterRunsDoesNotFalseNoRuns(t *testing.T) {
 	o.StartupGrace = 30 * time.Second
 	o.MaxBlock = 100 * time.Second
 	p := &fakePoller{polls: [][]RunState{{running(1, "ci")}, {}}} // then empty forever
-	v, err := Run(p, newClock(), o)
+	v, err := Run(context.Background(), p, newClock(), o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +241,7 @@ func TestTimeoutMeasuredFromIncompleteRun(t *testing.T) {
 	laterDone := RunState{ID: 2, Name: "release", Status: "completed", Conclusion: "success", StartedAt: epoch}
 	o := opts() // Timeout 300s — old leg is 40m old, running leg is 0s old
 	p := &fakePoller{polls: [][]RunState{{oldDone, later}, {oldDone, laterDone}}}
-	v, err := Run(p, newClock(), o)
+	v, err := Run(context.Background(), p, newClock(), o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,11 +257,40 @@ func TestQueuedRunDoesNotFalseTimeout(t *testing.T) {
 	o := opts()
 	o.MaxBlock = 50 * time.Second
 	p := &fakePoller{polls: [][]RunState{{queued}}}
-	v, err := Run(p, newClock(), o)
+	v, err := Run(context.Background(), p, newClock(), o)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if v.Conclusion != "pending" {
 		t.Fatalf("queued run must yield pending, got %+v", v)
+	}
+}
+
+func TestCancelledBeforePollReturnsCtxErr(t *testing.T) {
+	// A Ctrl-C that lands before (or between) polls: Run must abandon the loop and
+	// surface ctx.Err() rather than an empty/green verdict.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	p := &fakePoller{polls: [][]RunState{{running(1, "ci")}}}
+	v, err := Run(ctx, p, newClock(), opts())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if v.Conclusion != "" {
+		t.Errorf("cancelled run must yield no verdict, got %+v", v)
+	}
+}
+
+func TestCancelledDuringSleepReturnsCtxErr(t *testing.T) {
+	// The runs are still going, so Run reaches the inter-poll Sleep; the interrupt
+	// arrives there (onSleep cancels). Sleep must return ctx.Err() and Run must
+	// propagate it instead of blocking out the interval.
+	ctx, cancel := context.WithCancel(context.Background())
+	clk := newClock()
+	clk.onSleep = cancel
+	p := &fakePoller{polls: [][]RunState{{running(1, "ci")}}}
+	_, err := Run(ctx, p, clk, opts())
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }

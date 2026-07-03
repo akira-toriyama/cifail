@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"time"
 
@@ -73,35 +74,36 @@ func runWait(cmd *cobra.Command, args []string) error {
 	if waitSHA != "" && !isFullSHA(waitSHA) {
 		return core.Usagef("--sha must be a full 40-character commit sha, got %q (omit --sha to use HEAD)", waitSHA)
 	}
+	ctx := cmd.Context()
 
 	dir, err := os.Getwd()
 	if err != nil {
 		return core.APIf("getwd: %v", err)
 	}
-	owner, repo, err := gh.ResolveRepo(waitRepo, dir)
+	owner, repo, err := gh.ResolveRepo(ctx, waitRepo, dir)
 	if err != nil {
-		return err
+		return interruptOr(ctx, err)
 	}
 	sha := waitSHA
 	if sha == "" {
-		if sha, err = gh.CurrentSHA(dir); err != nil {
-			return err
+		if sha, err = gh.CurrentSHA(ctx, dir); err != nil {
+			return interruptOr(ctx, err)
 		}
 	}
-	client, err := gh.NewClient(owner, repo)
+	client, err := gh.NewClient(ctx, owner, repo)
 	if err != nil {
-		return err
+		return interruptOr(ctx, err)
 	}
 	cfg := extract.Default()
 	cfg.BudgetBytes = waitBudget
 	cfg.Context = waitContext
 
-	v, err := wait.Run(waitPoller{client, cfg}, realClock{}, wait.Options{
+	v, err := wait.Run(ctx, waitPoller{client, cfg}, realClock{}, wait.Options{
 		SHA: sha, Timeout: waitTimeout, Interval: waitInterval,
 		MaxBlock: wait.DefaultMaxBlock, StartupGrace: wait.DefaultStartupGrace,
 	})
 	if err != nil {
-		return err
+		return interruptOr(ctx, err)
 	}
 
 	if waitNDJSON {
@@ -121,8 +123,8 @@ type waitPoller struct {
 	cfg extract.Config
 }
 
-func (p waitPoller) RunsForSHA(sha string) ([]wait.RunState, error) {
-	runs, err := p.c.RunsForSHA(sha)
+func (p waitPoller) RunsForSHA(ctx context.Context, sha string) ([]wait.RunState, error) {
+	runs, err := p.c.RunsForSHA(ctx, sha)
 	if err != nil {
 		return nil, err
 	}
@@ -134,8 +136,8 @@ func (p waitPoller) RunsForSHA(sha string) ([]wait.RunState, error) {
 	return states, nil
 }
 
-func (p waitPoller) Excerpts(runID int64) (*model.Result, error) {
-	return collect.Collect(p.c, gh.Target{RunID: runID}, p.cfg)
+func (p waitPoller) Excerpts(ctx context.Context, runID int64) (*model.Result, error) {
+	return collect.Collect(ctx, p.c, gh.Target{RunID: runID}, p.cfg)
 }
 
 // isFullSHA reports whether s is a full 40-character hexadecimal commit sha.
@@ -152,8 +154,19 @@ func isFullSHA(s string) bool {
 	return true
 }
 
-// realClock is the production Clock.
+// realClock is the production Clock. Sleep waits on ctx too, so a Ctrl-C returns
+// promptly (with ctx.Err()) instead of blocking out the full poll interval.
 type realClock struct{}
 
-func (realClock) Now() time.Time        { return time.Now() }
-func (realClock) Sleep(d time.Duration) { time.Sleep(d) }
+func (realClock) Now() time.Time { return time.Now() }
+
+func (realClock) Sleep(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}

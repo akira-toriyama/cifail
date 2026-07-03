@@ -1,6 +1,7 @@
 package gh
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -22,7 +23,7 @@ func TestRunsForSHA(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{Owner: "o", Repo: "r", token: "t", http: srv.Client(), base: srv.URL}
-	runs, err := c.RunsForSHA("deadbeef")
+	runs, err := c.RunsForSHA(context.Background(), "deadbeef")
 	if err != nil {
 		t.Fatalf("RunsForSHA: %v", err)
 	}
@@ -51,7 +52,7 @@ func TestCurrentSHA(t *testing.T) {
 	git("init")
 	git("commit", "--allow-empty", "-m", "x")
 
-	sha, err := CurrentSHA(dir)
+	sha, err := CurrentSHA(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("CurrentSHA: %v", err)
 	}

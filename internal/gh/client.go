@@ -6,6 +6,7 @@
 package gh
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -34,9 +35,10 @@ type Client struct {
 }
 
 // NewClient builds a client for owner/repo, reusing the `gh` CLI's token. The
-// token is fetched via `gh auth token`, so cifail needs no auth of its own.
-func NewClient(owner, repo string) (*Client, error) {
-	token, err := ghAuthToken()
+// token is fetched via `gh auth token` (cancellable via ctx), so cifail needs no
+// auth of its own.
+func NewClient(ctx context.Context, owner, repo string) (*Client, error) {
+	token, err := ghAuthToken(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -50,9 +52,11 @@ func NewClient(owner, repo string) (*Client, error) {
 }
 
 // ghAuthToken shells out to `gh auth token` to reuse the user's existing
-// GitHub authentication.
-func ghAuthToken() (string, error) {
-	out, err := exec.Command("gh", "auth", "token").Output()
+// GitHub authentication. exec.CommandContext ties the child to ctx so a Ctrl-C
+// kills it instead of orphaning it.
+func ghAuthToken(ctx context.Context) (string, error) {
+	// #nosec G204 -- fixed argv (`gh auth token`); no user input reaches the argv.
+	out, err := exec.CommandContext(ctx, "gh", "auth", "token").Output()
 	if err != nil {
 		return "", core.APIf("could not get a GitHub token from `gh auth token` (is the gh CLI installed and authenticated? run `gh auth login`): %v", err)
 	}
@@ -64,13 +68,13 @@ func ghAuthToken() (string, error) {
 }
 
 // newRequest builds an authenticated GET for an API path (absolute, starting
-// with "/") or a full URL.
-func (c *Client) newRequest(pathOrURL string) (*http.Request, error) {
+// with "/") or a full URL, bound to ctx so the request is cancellable.
+func (c *Client) newRequest(ctx context.Context, pathOrURL string) (*http.Request, error) {
 	url := pathOrURL
 	if strings.HasPrefix(pathOrURL, "/") {
 		url = c.base + pathOrURL
 	}
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, core.APIf("build request: %v", err)
 	}
@@ -82,8 +86,8 @@ func (c *Client) newRequest(pathOrURL string) (*http.Request, error) {
 }
 
 // getJSON GETs an API path and decodes the JSON body into v.
-func (c *Client) getJSON(path string, v any) error {
-	req, err := c.newRequest(path)
+func (c *Client) getJSON(ctx context.Context, path string, v any) error {
+	req, err := c.newRequest(ctx, path)
 	if err != nil {
 		return err
 	}
@@ -103,8 +107,8 @@ func (c *Client) getJSON(path string, v any) error {
 
 // getRaw GETs a path (following redirects, e.g. the log archive's signed URL)
 // and returns the raw body bytes.
-func (c *Client) getRaw(path string) ([]byte, error) {
-	req, err := c.newRequest(path)
+func (c *Client) getRaw(ctx context.Context, path string) ([]byte, error) {
+	req, err := c.newRequest(ctx, path)
 	if err != nil {
 		return nil, err
 	}

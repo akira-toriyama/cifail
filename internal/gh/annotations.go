@@ -1,6 +1,7 @@
 package gh
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/akira-toriyama/cifail/internal/model"
@@ -21,9 +22,9 @@ type apiAnnotation struct {
 // id directly. These are free and tiny but sparse (present only when a problem
 // matcher fired), so this is best-effort: on any error it returns nil rather
 // than failing the whole extraction.
-func (c *Client) Annotations(jobID int64) []model.Annotation {
+func (c *Client) Annotations(ctx context.Context, jobID int64) []model.Annotation {
 	var raw []apiAnnotation
-	if err := c.getJSON(c.repoPath(fmt.Sprintf("/check-runs/%d/annotations", jobID)), &raw); err != nil {
+	if err := c.getJSON(ctx, c.repoPath(fmt.Sprintf("/check-runs/%d/annotations", jobID)), &raw); err != nil {
 		return nil
 	}
 	out := make([]model.Annotation, 0, len(raw))

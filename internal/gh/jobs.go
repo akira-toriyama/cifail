@@ -1,6 +1,7 @@
 package gh
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/akira-toriyama/cifail/internal/model"
@@ -48,13 +49,13 @@ type FailedStep struct {
 // and, within them, the failing steps. A job that failed with no failing step
 // (e.g. it was cancelled or the failure was outside a step) is still returned
 // with an empty Steps slice so the caller can fall back to the whole job log.
-func (c *Client) FailedJobs(runID int64) ([]FailedJob, error) {
+func (c *Client) FailedJobs(ctx context.Context, runID int64) ([]FailedJob, error) {
 	var jobs []apiJob
 	page := 1
 	for {
 		var list apiJobList
 		path := c.repoPath(fmt.Sprintf("/actions/runs/%d/jobs?per_page=100&page=%d", runID, page))
-		if err := c.getJSON(path, &list); err != nil {
+		if err := c.getJSON(ctx, path, &list); err != nil {
 			return nil, err
 		}
 		jobs = append(jobs, list.Jobs...)

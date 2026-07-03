@@ -1,6 +1,7 @@
 package gh
 
 import (
+	"context"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -10,11 +11,11 @@ import (
 
 // ResolveRepo returns owner/repo. A non-empty spec ("owner/repo") wins;
 // otherwise it is derived from the git "origin" remote of dir.
-func ResolveRepo(spec, dir string) (owner, repo string, err error) {
+func ResolveRepo(ctx context.Context, spec, dir string) (owner, repo string, err error) {
 	if spec != "" {
 		return parseRepoSpec(spec)
 	}
-	url, gitErr := gitOutput(dir, "remote", "get-url", "origin")
+	url, gitErr := gitOutput(ctx, dir, "remote", "get-url", "origin")
 	if gitErr != nil {
 		return "", "", core.Usagef("no --repo given and could not read the git origin remote in %q (%v); pass --repo owner/repo", dir, gitErr)
 	}
@@ -50,8 +51,8 @@ func parseRemoteURL(url string) (owner, repo string, ok bool) {
 }
 
 // CurrentBranch returns the checked-out branch name in dir (git symbolic HEAD).
-func CurrentBranch(dir string) (string, error) {
-	out, err := gitOutput(dir, "rev-parse", "--abbrev-ref", "HEAD")
+func CurrentBranch(ctx context.Context, dir string) (string, error) {
+	out, err := gitOutput(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return "", core.Usagef("could not determine the current branch in %q (%v); pass --branch, --pr, or --run", dir, err)
 	}
@@ -63,8 +64,8 @@ func CurrentBranch(dir string) (string, error) {
 }
 
 // CurrentSHA returns the full HEAD commit sha in dir.
-func CurrentSHA(dir string) (string, error) {
-	out, err := gitOutput(dir, "rev-parse", "HEAD")
+func CurrentSHA(ctx context.Context, dir string) (string, error) {
+	out, err := gitOutput(ctx, dir, "rev-parse", "HEAD")
 	if err != nil {
 		return "", core.Usagef("could not resolve HEAD in %q (%v); pass --sha", dir, err)
 	}
@@ -75,10 +76,14 @@ func CurrentSHA(dir string) (string, error) {
 	return sha, nil
 }
 
-// gitOutput runs `git -C dir <args...>` and returns trimmed stdout.
-func gitOutput(dir string, args ...string) (string, error) {
+// gitOutput runs `git -C dir <args...>` and returns trimmed stdout. The child is
+// bound to ctx (exec.CommandContext) so an interrupt kills it.
+func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
 	full := append([]string{"-C", dir}, args...)
-	out, err := exec.Command("git", full...).Output()
+	// #nosec G204 -- fixed program (`git`) with cifail-controlled subcommands; the
+	// only external value is dir (the working directory), passed as a plain argv
+	// to `-C`, not through a shell.
+	out, err := exec.CommandContext(ctx, "git", full...).Output()
 	if err != nil {
 		return "", err
 	}
