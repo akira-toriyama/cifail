@@ -34,8 +34,13 @@ var (
 //
 // On a non-zero exit it prints {"error":{...}} to stderr, keeping stdout pure.
 func Execute() int {
-	root := newRootCmd()
-	err := root.Execute()
+	return finish(newRootCmd().Execute())
+}
+
+// finish maps a returned error to the exit-code contract and renders the stderr
+// envelope — unless the error is Silent (wait already wrote its verdict to
+// stdout and needs only a nonzero exit code).
+func finish(err error) int {
 	if err == nil {
 		return int(core.CodeOK)
 	}
@@ -45,7 +50,9 @@ func Execute() int {
 		// error by contract.
 		ce = &core.Error{Code: core.CodeUsage, Msg: err.Error()}
 	}
-	renderError(ce)
+	if !ce.Silent {
+		renderError(ce)
+	}
 	return int(ce.Code)
 }
 
@@ -83,6 +90,7 @@ func newRootCmd() *cobra.Command {
 	f.BoolVar(&flagNDJSON, "ndjson", false, "emit compact single-line JSON instead of pretty JSON")
 
 	root.AddCommand(newVersionCmd())
+	root.AddCommand(newWaitCmd())
 	return root
 }
 
