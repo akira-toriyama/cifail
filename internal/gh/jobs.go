@@ -45,6 +45,55 @@ type FailedStep struct {
 	Name   string
 }
 
+// JobResult is a job's terminal state within a run or attempt: its display name
+// (the matrix identity, e.g. "test (ubuntu-latest, 20)"), conclusion, and URL.
+// Unlike FailedJob it keeps PASSING jobs — a same-named job passing on a sibling
+// run or a rerun attempt is the same-sha-divergence signal `flake` verdicts on.
+type JobResult struct {
+	Name       string
+	Conclusion string
+	HTMLURL    string
+}
+
+// AllJobs lists every job of the run's LATEST attempt (paginating), keeping ALL
+// conclusions — the passing jobs FailedJobs drops are the divergence signal.
+func (c *Client) AllJobs(ctx context.Context, runID int64) ([]JobResult, error) {
+	return c.listJobs(ctx, fmt.Sprintf("/actions/runs/%d/jobs", runID))
+}
+
+// AttemptJobs lists the jobs of a specific prior attempt. It is best-effort: a
+// never-rerun run or an out-of-range attempt number legitimately 404s, so any
+// error yields nil rather than failing the whole command (cf. Annotations).
+func (c *Client) AttemptJobs(ctx context.Context, runID int64, attempt int) []JobResult {
+	jobs, err := c.listJobs(ctx, fmt.Sprintf("/actions/runs/%d/attempts/%d/jobs", runID, attempt))
+	if err != nil {
+		return nil
+	}
+	return jobs
+}
+
+// listJobs paginates a jobs endpoint (an absolute path with no query) and
+// returns every job's name/conclusion/url.
+func (c *Client) listJobs(ctx context.Context, endpoint string) ([]JobResult, error) {
+	var out []JobResult
+	page := 1
+	for {
+		var list apiJobList
+		path := c.repoPath(fmt.Sprintf("%s?per_page=100&page=%d", endpoint, page))
+		if err := c.getJSON(ctx, path, &list); err != nil {
+			return nil, err
+		}
+		for _, j := range list.Jobs {
+			out = append(out, JobResult{Name: j.Name, Conclusion: j.Conclusion, HTMLURL: j.HTMLURL})
+		}
+		if len(out) >= list.TotalCount || len(list.Jobs) == 0 {
+			break
+		}
+		page++
+	}
+	return out, nil
+}
+
 // FailedJobs lists the run's jobs (paginating) and keeps only the failing jobs
 // and, within them, the failing steps. A job that failed with no failing step
 // (e.g. it was cancelled or the failure was outside a step) is still returned
