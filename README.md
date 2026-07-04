@@ -153,6 +153,45 @@ for longer runs it returns `pending` and you re-run `cifail wait` to continue �
 `elapsed_s` is measured from the run's start, so it stays accurate across
 re-runs.
 
+## `cifail flake` — rerun or debug?
+
+Faced with a red run, an agent has to decide: is this a flaky failure worth a
+rerun, or a real bug worth debugging? Guessing wrong burns a whole session
+debugging a flake — or reruns a genuine bug into hiding. `cifail flake <run-id>`
+(or `--pr <n>`) returns a 1-shot, **evidence-tiered** verdict for that decision,
+from the run/attempt/sibling history — no upload instrumentation, works on a
+freshly cloned repo.
+
+```console
+$ cifail flake 28083877791 --ndjson
+{"verdict":"likely_flaky","confidence":"high",
+ "run":{"id":28083877791,"head_sha":"…","run_attempt":2,"workflow":"CI","html_url":"…"},
+ "failing_jobs":["test (ubuntu-latest, 20)"],
+ "evidence":[{"tier":"same_run_pass_attempt","job_name":"test (ubuntu-latest, 20)",
+              "detail":"attempt 1 passed job 'test (ubuntu-latest, 20)'","attempt":1,"html_url":"…"}],
+ "base_rate":{"branch":"main","runs":20,"failures":3,"rate":0.15,"window":"last 20 runs on main"},
+ "runs_examined":24,"window":{"attempts_examined":1,"siblings_examined":3,"branch_runs":20}}
+```
+
+The verdict is honest by construction. It is `likely_flaky` **only** on same-sha
+divergence — the same failing job passed on a prior **attempt** of this run, or
+on a **sibling** run of the same head sha (matched on workflow **and** event, so
+a `push`-vs-`pull_request` behavioral difference isn't mistaken for flakiness).
+That is near-proof: same commit, same job, different outcome. Absent it, the
+verdict is `insufficient_evidence` — the branch **base rate** is reported for
+calibration but never escalates the verdict, and `runs_examined` / `window` tell
+the agent how much history actually backed the call.
+
+Flags: `--repo`, `--pr <n>` (instead of a run-id), `--branch-window` (default
+`20`, recent branch runs sampled for the base rate), `--max-siblings` (default
+`10`), `--ndjson`.
+
+Exit codes: **both** verdicts exit `0` — a produced judgement is a successful
+output, and the agent branches on the JSON `verdict` field. `1` means the target
+run was not red / not found (soft miss), `2` usage, `3` API/IO, `130`
+interrupted. (v1 attributes at the step/job level over REST only; it does not
+parse test-level logs.)
+
 ## Development
 
 ```sh

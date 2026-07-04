@@ -11,10 +11,13 @@ cmd/cifail            → os.Exit(cli.Execute())
 internal/cli          → cobra adapter: flags, exit-code contract, JSON output
 internal/collect      → orchestrates gh → extract → model.Result
 internal/gh           → GitHub REST (reuses `gh auth token`); resolve run, jobs,
-                        annotations, log archive, runs-for-sha. IO lives here and
-                        ONLY here.
+                        annotations, log archive, runs-for-sha, all-jobs/attempt-
+                        jobs/branch-runs (for `flake`). IO lives here and ONLY here.
 internal/wait         → PURE poll/aggregate/exit logic for the `wait` subcommand;
                         a gh Poller + a Clock are injected (no IO here)
+internal/flake        → PURE flaky-vs-real verdict for the `flake` subcommand;
+                        cli gathers an Evidence snapshot (all IO), Decide reasons
+                        over it (no IO). The honesty gate lives here.
 internal/extract      → PURE budget algorithm + severity ladder (no IO)
 internal/model        → JSON output shapes (dependency-free)
 internal/core         → exit-code contract + structured Error
@@ -36,6 +39,15 @@ call/deadline — the JSON `conclusion` says `pending`=re-run vs `timed_out`); i
 `wait`, `1` means the CI run went red (failure/cancelled). `wait` writes its
 verdict to **stdout** even on a nonzero exit (no stderr envelope) via
 `core.Error.Silent`.
+
+The `flake` subcommand keeps the base contract and maps **both** verdicts
+(`likely_flaky` and `insufficient_evidence`) to `0` — a produced judgement is a
+successful output; the agent branches on the JSON `verdict` field (as `extract`
+returns `0` for any produced Result). `1` there means the target run was not red
+/ not found (the `ResolveRun` soft miss). Deliberately no distinct code per
+verdict: `1` already means no-failure (root) and red (`wait`), so overloading it
+would break `&&` chains. The rerun-vs-debug honesty gate — `likely_flaky` only on
+same-sha divergence, base rate never escalates it — lives in `internal/flake`.
 
 `130` is interrupted: `Execute` derives a root ctx from `signal.NotifyContext`
 (SIGINT/SIGTERM), threaded through `gh` (git/gh via `exec.CommandContext`, HTTP
