@@ -63,9 +63,11 @@ $ cifail delta [run-id] [--pr N | --branch B] [--repo owner/repo] \
                 "runner":{"green":"ubuntu-24.04/20250601.1",
                           "failing":"ubuntu-24.04/20250620.2"}},
  "jobs":{"newly_failing":["test (ubuntu-latest, 1.26)"]},
- "budget":{"limit_bytes":4096,"used_bytes":2210},
- "note":""}
+ "budget":{"limit_bytes":4096,"used_bytes":2210,"omitted_items":0}}
 ```
+
+(`note` is `omitempty`: present only on a degraded report — no green baseline,
+expired logs, or the same-commit pivot.)
 
 Semantics:
 
@@ -95,7 +97,7 @@ Semantics:
   line carries). Compare resolved SHAs per action ref across runs — the
   differentiator no text diff can catch. Log fetch for either side is
   **best-effort** (old runs' archives expire): on failure, `environment` is
-  null and the `note` says why (house pattern: Annotations / AttemptJobs).
+  omitted and the `note` says why (house pattern: Annotations / AttemptJobs).
 - **`jobs.newly_failing`**: jobs failing in the target run whose same-name job
   succeeded in the green run (`AllJobs` both sides; matrix display name is the
   identity key, as in `flake`).
@@ -113,11 +115,12 @@ Semantics:
 ```
 internal/cli/delta.go     cobra adapter: entry grammar, deltaProber (narrow
                           unexported interface over *gh.Client), buildDeltaEvidence
-                          (ALL IO, trailing ctx.Err() check), print, Silent exits
+                          (ALL IO, trailing ctx.Err() check), print, always exit 0
 internal/delta/           PURE (stdlib + model + core only): Set-up-job parser,
                           file classification (top_dirs / lockfiles / workflows),
                           uses:-line extraction, budget capping,
-                          Build(ev Evidence) → model.DeltaReport, ExitCode
+                          Build(ev Evidence) → model.DeltaReport (a produced
+                          report always exits 0; no ExitCode mapping needed)
 internal/gh/              apiRun: +workflow_id; RunSummary: +HeadSHA;
                           +LastGreenRun; +CompareCommits (api* struct → carrier)
 internal/model/delta.go   dep-free JSON shapes: snake_case tags, always-present
@@ -130,8 +133,10 @@ Conventions binding this work (from the codebase read):
 - Errors classified at source: `core.Usagef` / `core.APIf` / `core.NoFailuref`;
   new endpoints route non-200s through `statusError`.
 - Flag defaults seeded from `delta.Default()` so `--help` shows real values.
-- `ExitCode` has a default case returning `CodeAPI` (typo'd-verdict guard),
-  wrapped as `&core.Error{Code, Silent: true}` after stdout is written.
+- No verdict/`ExitCode`: `runDelta` prints the report and returns nil — any
+  produced report is exit 0 (unlike `flake`/`wait`, delta has no Silent-exit
+  path). Only usage (2), the `ResolveRun` soft miss (1), API/IO (3), and
+  interrupt (130) leave via `core.Error`.
 
 ## Testing (stdlib only, no testify, no golden files)
 

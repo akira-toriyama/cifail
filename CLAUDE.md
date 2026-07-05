@@ -18,6 +18,10 @@ internal/wait         → PURE poll/aggregate/exit logic for the `wait` subcomma
 internal/flake        → PURE flaky-vs-real verdict for the `flake` subcommand;
                         cli gathers an Evidence snapshot (all IO), Decide reasons
                         over it (no IO). The honesty gate lives here.
+internal/delta        → PURE input-delta between a failing run and the last
+                        green run of the same workflow+branch; cli gathers an
+                        Evidence snapshot (all IO), Build reasons over it.
+                        Zero-commit pivot + Set-up-job parsing live here.
 internal/extract      → PURE budget algorithm + severity ladder (no IO)
 internal/model        → JSON output shapes (dependency-free)
 internal/core         → exit-code contract + structured Error
@@ -48,6 +52,13 @@ returns `0` for any produced Result). `1` there means the target run was not red
 verdict: `1` already means no-failure (root) and red (`wait`), so overloading it
 would break `&&` chains. The rerun-vs-debug honesty gate — `likely_flaky` only on
 same-sha divergence, base rate never escalates it — lives in `internal/flake`.
+
+The `delta` subcommand keeps the base contract: any produced report exits `0`
+(degraded reports included — no green baseline in retention, expired log
+archives, zero-commit; the JSON `note` explains), so agents branch on
+`last_green` / `same_commit` / `note`, not the exit code. `1` remains the
+ResolveRun soft miss. There is deliberately no per-verdict exit code and no
+ExitCode func in internal/delta — delta has no verdict enum to guard.
 
 `130` is interrupted: `Execute` derives a root ctx from `signal.NotifyContext`
 (SIGINT/SIGTERM), threaded through `gh` (git/gh via `exec.CommandContext`, HTTP
