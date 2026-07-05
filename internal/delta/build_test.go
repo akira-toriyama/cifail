@@ -71,7 +71,7 @@ func TestBuildEnvironmentDrift(t *testing.T) {
 	if r.Environment == nil {
 		t.Fatal("Environment = nil, want drift report")
 	}
-	var checkout, cache int = -1, -1
+	checkout, cache := -1, -1
 	for i, a := range r.Environment.Actions {
 		switch a.Ref {
 		case "actions/checkout@v4":
