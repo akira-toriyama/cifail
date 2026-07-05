@@ -52,3 +52,50 @@ func TestBranchRunsCarryHeadSHA(t *testing.T) {
 		t.Fatalf("runs = %+v, want one run with HeadSHA def456", runs)
 	}
 }
+
+// LastGreenRun asks the workflow-scoped runs endpoint so the server filters by
+// workflow AND status — one call, no client-side window that could miss older
+// greens.
+func TestLastGreenRun(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/actions/workflows/7/runs") {
+			t.Errorf("path = %q, want .../actions/workflows/7/runs", r.URL.Path)
+		}
+		q := r.URL.Query()
+		if q.Get("branch") != "main" || q.Get("status") != "success" || q.Get("per_page") != "1" {
+			t.Errorf("query = %v, want branch=main status=success per_page=1", q)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"total_count":9,"workflow_runs":[
+			{"id":120,"status":"completed","conclusion":"success","head_sha":"def","html_url":"g"}]}`)
+	}))
+	defer srv.Close()
+
+	c := &Client{Owner: "o", Repo: "r", token: "t", http: srv.Client(), base: srv.URL}
+	run, ok, err := c.LastGreenRun(context.Background(), 7, "main")
+	if err != nil {
+		t.Fatalf("LastGreenRun: %v", err)
+	}
+	if !ok || run.ID != 120 || run.HeadSHA != "def" {
+		t.Fatalf("got ok=%v run=%+v, want ok with ID 120 / HeadSHA def", ok, run)
+	}
+}
+
+// A branch with no green history is a legitimate degrade for delta (report
+// with last_green: null, exit 0) — so "none found" must be ok=false, NOT an error.
+func TestLastGreenRunNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"total_count":0,"workflow_runs":[]}`)
+	}))
+	defer srv.Close()
+
+	c := &Client{Owner: "o", Repo: "r", token: "t", http: srv.Client(), base: srv.URL}
+	_, ok, err := c.LastGreenRun(context.Background(), 7, "main")
+	if err != nil {
+		t.Fatalf("LastGreenRun: %v", err)
+	}
+	if ok {
+		t.Error("ok = true, want false for an empty run list")
+	}
+}
