@@ -169,6 +169,34 @@ func TestBuildDeltaEvidenceExpiredLogs(t *testing.T) {
 	}
 }
 
+// Both archives fetch cleanly, but neither contains a discoverable 'Set up
+// job' log for the job names involved: the degrade must still carry a note,
+// never a silently-omitted environment block.
+func TestBuildDeltaEvidenceEmptySetupNote(t *testing.T) {
+	p := &fakeDeltaProber{
+		allJobs: map[int64][]gh.JobResult{
+			123: {{Name: "test", Conclusion: "failure"}},
+			120: {{Name: "test", Conclusion: "success"}},
+		},
+		green:   gh.RunSummary{ID: 120, HeadSHA: "def"},
+		greenOK: true,
+		logs: map[int64]fakeDeltaArchive{
+			123: {"other-job": "irrelevant"},
+			120: {"other-job": "irrelevant"},
+		},
+	}
+	ev, err := buildDeltaEvidence(context.Background(), p, deltaTestRun, time.Now())
+	if err != nil {
+		t.Fatalf("buildDeltaEvidence: %v", err)
+	}
+	if len(ev.FailingSetup) != 0 || len(ev.GreenSetup) != 0 {
+		t.Error("setups must be empty when no job name in the archive matches")
+	}
+	if !strings.Contains(ev.EnvNote, "no 'Set up job'") {
+		t.Errorf("EnvNote = %q, want a no-setup-log note", ev.EnvNote)
+	}
+}
+
 // A compare failure (force-push made the green sha unreachable) degrades with
 // a note instead of failing a report that is still mostly producible.
 func TestBuildDeltaEvidenceCompareDegrades(t *testing.T) {

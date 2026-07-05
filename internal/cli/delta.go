@@ -226,6 +226,11 @@ func buildDeltaEvidence(ctx context.Context, p deltaProber, run model.Run, now t
 	} else {
 		ev.FailingSetup = setupLogs(fArchive, failingJobs)
 		ev.GreenSetup = setupLogs(gArchive, greenJobs)
+		if len(ev.FailingSetup) == 0 || len(ev.GreenSetup) == 0 {
+			// Both archives fetched, but a side had no discoverable 'Set up
+			// job' log — omit environment WITH a note, never silently.
+			ev.EnvNote = "environment drift unavailable: no 'Set up job' logs found in a run's archive"
+		}
 	}
 
 	// Best-effort fetches swallow cancellation; surface a Ctrl-C that landed
