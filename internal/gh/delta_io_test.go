@@ -99,3 +99,33 @@ func TestLastGreenRunNotFound(t *testing.T) {
 		t.Error("ok = true, want false for an empty run list")
 	}
 }
+
+// CompareCommits is delta's commit_range source: base = green sha, head =
+// failing sha. behind_by > 0 is the rebase/force-push hidden-delta signal.
+func TestCompareCommits(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/compare/def...abc") {
+			t.Errorf("path = %q, want .../compare/def...abc", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"ahead_by":3,"behind_by":1,"total_commits":3,"files":[
+			{"filename":"go.sum","additions":14,"deletions":9,"patch":"@@ -1 +1 @@"},
+			{"filename":"src/api/x.go","additions":2,"deletions":0}]}`)
+	}))
+	defer srv.Close()
+
+	c := &Client{Owner: "o", Repo: "r", token: "t", http: srv.Client(), base: srv.URL}
+	cmp, err := c.CompareCommits(context.Background(), "def", "abc")
+	if err != nil {
+		t.Fatalf("CompareCommits: %v", err)
+	}
+	if cmp.AheadBy != 3 || cmp.BehindBy != 1 || cmp.TotalCommits != 3 {
+		t.Errorf("counts = %+v, want ahead 3 / behind 1 / commits 3", cmp)
+	}
+	if len(cmp.Files) != 2 || cmp.Files[0].Path != "go.sum" || cmp.Files[0].Additions != 14 || cmp.Files[0].Patch == "" {
+		t.Errorf("files = %+v, want go.sum first with stats and patch", cmp.Files)
+	}
+	if cmp.Capped {
+		t.Error("Capped = true, want false for 2 files")
+	}
+}
