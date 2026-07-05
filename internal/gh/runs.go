@@ -20,6 +20,26 @@ type RunSummary struct {
 	StartedAt  time.Time
 }
 
+// BranchRuns lists up to perPage of the most recent workflow runs on a branch
+// (newest first, single page) for the base-rate tier. The bool reports whether
+// the branch has MORE runs than were fetched, so a truncated base-rate survey
+// isn't mistaken for a full one.
+func (c *Client) BranchRuns(ctx context.Context, branch string, perPage int) ([]RunSummary, bool, error) {
+	v := url.Values{"branch": {branch}, "per_page": {fmt.Sprint(perPage)}}
+	var list apiRunList
+	if err := c.getJSON(ctx, c.repoPath("/actions/runs?"+v.Encode()), &list); err != nil {
+		return nil, false, err
+	}
+	out := make([]RunSummary, 0, len(list.Runs))
+	for _, r := range list.Runs {
+		out = append(out, RunSummary{
+			ID: r.ID, Name: r.Name, Status: r.Status, Conclusion: r.Conclusion,
+			Event: r.Event, HTMLURL: r.HTMLURL, StartedAt: r.RunStartedAt,
+		})
+	}
+	return out, list.TotalCount > len(out), nil
+}
+
 // RunsForSHA lists every workflow run for the head sha (any status), paginating,
 // and returns their status snapshots.
 func (c *Client) RunsForSHA(ctx context.Context, sha string) ([]RunSummary, error) {
