@@ -106,6 +106,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newWaitCmd())
 	root.AddCommand(newFlakeCmd())
+	root.AddCommand(newDeltaCmd())
 	return root
 }
 
