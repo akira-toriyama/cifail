@@ -22,6 +22,7 @@ type Target struct {
 // apiRun is the subset of a workflow-run object cifail needs.
 type apiRun struct {
 	ID           int64     `json:"id"`
+	WorkflowID   int64     `json:"workflow_id"`
 	Name         string    `json:"name"`
 	Status       string    `json:"status"`
 	Conclusion   string    `json:"conclusion"`
@@ -99,6 +100,7 @@ func (c *Client) latestFailure(ctx context.Context, filter url.Values, desc stri
 func toRun(r apiRun) model.Run {
 	return model.Run{
 		ID:         r.ID,
+		WorkflowID: r.WorkflowID,
 		Name:       r.Name,
 		Status:     r.Status,
 		Conclusion: r.Conclusion,

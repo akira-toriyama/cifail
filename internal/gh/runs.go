@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-// RunSummary is a workflow run's status snapshot for `wait`: enough to poll for
-// completion, compute elapsed from StartedAt, and (for failing runs) fetch
-// excerpts by ID.
+// RunSummary is a workflow run's status snapshot: enough for `wait` to poll for
+// completion and compute elapsed from StartedAt, and for `delta` to diff the
+// run's head commit (HeadSHA) against another run's.
 type RunSummary struct {
 	ID         int64
 	Name       string
@@ -18,6 +18,7 @@ type RunSummary struct {
 	Event      string
 	HTMLURL    string
 	StartedAt  time.Time
+	HeadSHA    string
 }
 
 // BranchRuns lists up to perPage of the most recent workflow runs on a branch
@@ -34,7 +35,7 @@ func (c *Client) BranchRuns(ctx context.Context, branch string, perPage int) ([]
 	for _, r := range list.Runs {
 		out = append(out, RunSummary{
 			ID: r.ID, Name: r.Name, Status: r.Status, Conclusion: r.Conclusion,
-			Event: r.Event, HTMLURL: r.HTMLURL, StartedAt: r.RunStartedAt,
+			Event: r.Event, HTMLURL: r.HTMLURL, StartedAt: r.RunStartedAt, HeadSHA: r.HeadSHA,
 		})
 	}
 	return out, list.TotalCount > len(out), nil
@@ -54,7 +55,7 @@ func (c *Client) RunsForSHA(ctx context.Context, sha string) ([]RunSummary, erro
 		for _, r := range list.Runs {
 			out = append(out, RunSummary{
 				ID: r.ID, Name: r.Name, Status: r.Status, Conclusion: r.Conclusion,
-				Event: r.Event, HTMLURL: r.HTMLURL, StartedAt: r.RunStartedAt,
+				Event: r.Event, HTMLURL: r.HTMLURL, StartedAt: r.RunStartedAt, HeadSHA: r.HeadSHA,
 			})
 		}
 		if len(out) >= list.TotalCount || len(list.Runs) == 0 {
