@@ -192,6 +192,35 @@ run was not red / not found (soft miss), `2` usage, `3` API/IO, `130`
 interrupted. (v1 attributes at the step/job level over REST only; it does not
 parse test-level logs.)
 
+## `cifail delta` — what changed since the last green run
+
+When a failure is real (see `cifail flake`), the first debugging question is
+"what changed since this workflow was last green?". `delta` answers it in one
+bounded JSON document: it finds the last green run of the same workflow on the
+same branch and reports the commit range (top dirs, lockfiles, workflow
+edits), the environment drift no text diff can catch (resolved action SHAs,
+runner image — mined from both runs' 'Set up job' logs), and the jobs that
+newly fail. When both runs share the same commit it says so loudly
+(`same_commit: true`), omits `commit_range`, and points the note at the
+environment.
+
+```console
+$ cifail delta 28083877791 --ndjson
+{"failing":{"run":28083877791,"sha":"abc1234","attempt":1,"url":"…"},"last_green":{"run":28083112345,"sha":"def5678","age_days":2,"url":"…"},"same_commit":false,"commit_range":{"ahead_by":3,"behind_by":0,"files_changed":12,"top_dirs":["src/api (8)",". (2)",".github/workflows (2)"],"lockfiles":[{"path":"go.sum","additions":14,"deletions":9}],"workflow_changes":[{"path":".github/workflows/ci.yml","uses_changed":["actions/setup-node v4→v5"]}]},"environment":{"actions":[{"ref":"actions/checkout@v4","green_sha":"11bd719…","failing_sha":"08c6903…","drifted":true}],"runner":{"green":"ubuntu-24.04/20250601.1.0","failing":"ubuntu-24.04/20250620.2.0","drifted":true}},"jobs":{"newly_failing":["test (ubuntu-latest, 1.26)"]},"budget":{"limit_bytes":4096,"used_bytes":2210,"omitted_items":0}}
+```
+
+Flags: a positional run-id, `--pr N`, or `--branch B` pick the failing run
+(default: the newest failing run on the current branch); `--repo owner/repo`
+overrides the origin-derived repository; `--budget-bytes` bounds the
+variable-length lists (default 4096, trimmed highest-signal-first with the
+drop count in `budget.omitted_items`); `--ndjson` emits compact JSON.
+
+Exit codes: any produced report exits `0` — including degraded ones
+(`last_green: null` when the branch has no green history in retention, no
+`environment` when a log archive expired; `note` explains). Branch on the
+JSON fields, not the exit code. `1` means the target run was not red / not
+found, `2` usage, `3` API/IO, `130` interrupted.
+
 ## Development
 
 ```sh

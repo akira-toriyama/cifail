@@ -17,7 +17,11 @@ type Result struct {
 
 // Run identifies the workflow run whose failure cifail extracted.
 type Run struct {
-	ID         int64  `json:"id"`
+	ID int64 `json:"id"`
+	// WorkflowID identifies the workflow this run belongs to — `delta` uses it
+	// to find the last green run of the SAME workflow (display names can be
+	// renamed; the id cannot).
+	WorkflowID int64  `json:"workflow_id,omitempty"`
 	Name       string `json:"name,omitempty"`
 	Status     string `json:"status"`     // e.g. completed
 	Conclusion string `json:"conclusion"` // e.g. failure
