@@ -60,16 +60,17 @@ func fuzzEvidence(nJobs, nAttempts, nSiblings, branchRuns, branchFailures int, w
 			}
 			jobs[i] = JobConclusion{Name: names[i], Conclusion: concl}
 		}
-		// Half the siblings share the target's workflow/event, half don't.
-		wf, ev := workflow, event
+		// Half the siblings share the target's workflow id (1), half a different
+		// one (2), so Decide's Tier-B gate is exercised both ways.
+		wfid := int64(1)
 		if s%2 == 0 {
-			wf = workflow + "-other"
+			wfid = 2
 		}
-		siblings[s] = SiblingRun{ID: int64(s + 1), Workflow: wf, Event: ev, Jobs: jobs}
+		siblings[s] = SiblingRun{ID: int64(s + 1), WorkflowID: wfid, Event: event, Jobs: jobs}
 	}
 
 	return Evidence{
-		RunID: 1, HeadSHA: "sha", Workflow: workflow, Event: event, RunAttempt: nAttempts + 1,
+		RunID: 1, HeadSHA: "sha", WorkflowID: 1, Workflow: workflow, Event: event, RunAttempt: nAttempts + 1,
 		TargetJobs:    target,
 		PriorAttempts: attempts,
 		Siblings:      siblings,

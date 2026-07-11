@@ -137,7 +137,8 @@ type flakeProber interface {
 func buildEvidence(ctx context.Context, p flakeProber, run model.Run, cfg flake.Config) (flake.Evidence, error) {
 	ev := flake.Evidence{
 		RunID: run.ID, HeadSHA: run.HeadSHA, HeadBranch: run.HeadBranch,
-		Workflow: run.Name, Event: run.Event, RunAttempt: run.Attempt, HTMLURL: run.HTMLURL,
+		WorkflowID: run.WorkflowID, Workflow: run.Name,
+		Event: run.Event, RunAttempt: run.Attempt, HTMLURL: run.HTMLURL,
 	}
 
 	// Target jobs (latest attempt) — the failing set + the passing baseline.
@@ -173,7 +174,7 @@ func buildEvidence(ctx context.Context, p flakeProber, run model.Run, cfg flake.
 			return flake.Evidence{}, err
 		}
 		ev.Siblings = append(ev.Siblings, flake.SiblingRun{
-			ID: s.ID, Workflow: s.Name, Event: s.Event, Conclusion: s.Conclusion,
+			ID: s.ID, WorkflowID: s.WorkflowID, Event: s.Event, Conclusion: s.Conclusion,
 			HTMLURL: s.HTMLURL, Jobs: toJobConclusions(jobs),
 		})
 	}

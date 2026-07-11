@@ -11,7 +11,11 @@ import (
 // completion and compute elapsed from StartedAt, and for `delta` to diff the
 // run's head commit (HeadSHA) against another run's.
 type RunSummary struct {
-	ID         int64
+	ID int64
+	// WorkflowID is the run's workflow identity. `flake` matches same-sha
+	// siblings on it rather than the display Name, since two distinct workflows
+	// can share a name (e.g. both "CI") — a name match would be a false signal.
+	WorkflowID int64
 	Name       string
 	Status     string // queued | in_progress | completed
 	Conclusion string
