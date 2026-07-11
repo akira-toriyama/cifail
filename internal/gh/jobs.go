@@ -72,10 +72,11 @@ func (c *Client) AttemptJobs(ctx context.Context, runID int64, attempt int) []Jo
 	return jobs
 }
 
-// listJobs paginates a jobs endpoint (an absolute path with no query) and
-// returns every job's name/conclusion/url.
-func (c *Client) listJobs(ctx context.Context, endpoint string) ([]JobResult, error) {
-	var out []JobResult
+// fetchAllJobs paginates a jobs endpoint (an absolute path with no query) and
+// returns every raw job. listJobs and FailedJobs share it so the pagination loop
+// and its termination condition live in one place instead of drifting in two.
+func (c *Client) fetchAllJobs(ctx context.Context, endpoint string) ([]apiJob, error) {
+	var jobs []apiJob
 	page := 1
 	for {
 		var list apiJobList
@@ -83,13 +84,24 @@ func (c *Client) listJobs(ctx context.Context, endpoint string) ([]JobResult, er
 		if err := c.getJSON(ctx, path, &list); err != nil {
 			return nil, err
 		}
-		for _, j := range list.Jobs {
-			out = append(out, JobResult{Name: j.Name, Conclusion: j.Conclusion, HTMLURL: j.HTMLURL})
-		}
-		if len(out) >= list.TotalCount || len(list.Jobs) == 0 {
+		jobs = append(jobs, list.Jobs...)
+		if len(jobs) >= list.TotalCount || len(list.Jobs) == 0 {
 			break
 		}
 		page++
+	}
+	return jobs, nil
+}
+
+// listJobs paginates a jobs endpoint and returns every job's name/conclusion/url.
+func (c *Client) listJobs(ctx context.Context, endpoint string) ([]JobResult, error) {
+	jobs, err := c.fetchAllJobs(ctx, endpoint)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]JobResult, 0, len(jobs))
+	for _, j := range jobs {
+		out = append(out, JobResult{Name: j.Name, Conclusion: j.Conclusion, HTMLURL: j.HTMLURL})
 	}
 	return out, nil
 }
@@ -99,19 +111,9 @@ func (c *Client) listJobs(ctx context.Context, endpoint string) ([]JobResult, er
 // (e.g. it was cancelled or the failure was outside a step) is still returned
 // with an empty Steps slice so the caller can fall back to the whole job log.
 func (c *Client) FailedJobs(ctx context.Context, runID int64) ([]FailedJob, error) {
-	var jobs []apiJob
-	page := 1
-	for {
-		var list apiJobList
-		path := c.repoPath(fmt.Sprintf("/actions/runs/%d/jobs?per_page=100&page=%d", runID, page))
-		if err := c.getJSON(ctx, path, &list); err != nil {
-			return nil, err
-		}
-		jobs = append(jobs, list.Jobs...)
-		if len(jobs) >= list.TotalCount || len(list.Jobs) == 0 {
-			break
-		}
-		page++
+	jobs, err := c.fetchAllJobs(ctx, fmt.Sprintf("/actions/runs/%d/jobs", runID))
+	if err != nil {
+		return nil, err
 	}
 
 	var failed []FailedJob
