@@ -80,6 +80,7 @@ func Run(ctx context.Context, p Poller, clk Clock, o Options) (model.Verdict, er
 			// transient empty list after runs appeared must not read as green.
 			if !seenRuns && now.Sub(callStart) >= o.StartupGrace {
 				return model.Verdict{SHA: o.SHA, Status: "completed", Conclusion: "no_runs",
+					Runs: []model.RunOutcome{},
 					Note: "no workflow runs found for this sha (nothing triggered on this event, or the push has not registered yet)"}, nil
 			}
 		} else {

@@ -2,7 +2,9 @@ package wait
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -188,6 +190,32 @@ func TestNoRuns(t *testing.T) {
 	}
 	if v.Conclusion != "no_runs" || ExitCode(v) != core.CodeOK {
 		t.Fatalf("got %+v (exit %d)", v, ExitCode(v))
+	}
+}
+
+func TestNoRunsEmitsEmptyRunsArray(t *testing.T) {
+	// A no_runs verdict must serialize runs as [] (not null): every other verdict
+	// path fills Runs via summaries() (a non-nil make), and an agent piping
+	// `.runs[]` through jq hits "Cannot iterate over null" on a bare null.
+	o := opts()
+	o.StartupGrace = 30 * time.Second
+	p := &fakePoller{polls: [][]RunState{{}}}
+	v, err := Run(context.Background(), p, newClock(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Conclusion != "no_runs" {
+		t.Fatalf("precondition: want no_runs, got %+v", v)
+	}
+	if v.Runs == nil {
+		t.Fatalf("no_runs verdict left Runs nil; want a non-nil empty slice: %+v", v)
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"runs":[]`) {
+		t.Errorf("runs must serialize as [] not null: %s", b)
 	}
 }
 
