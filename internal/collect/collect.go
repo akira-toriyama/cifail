@@ -11,12 +11,44 @@ import (
 	"github.com/akira-toriyama/cifail/internal/model"
 )
 
+// ghAPI is the slice of *gh.Client the orchestration drives. Injecting it as an
+// interface (mirroring wait.Poller / flakeProber / deltaProber) lets Collect's
+// branchy step-log fallbacks be unit-tested with a fake — no network.
+type ghAPI interface {
+	ResolveRun(ctx context.Context, t gh.Target) (model.Run, error)
+	FailedJobs(ctx context.Context, runID int64) ([]gh.FailedJob, error)
+	FetchLogs(ctx context.Context, runID int64) (logArchive, error)
+	Annotations(ctx context.Context, jobID int64) []model.Annotation
+}
+
+// logArchive is the slice of *gh.LogArchive the orchestration reads.
+type logArchive interface {
+	JobLog(jobName string) (string, bool)
+	StepLog(jobName string, stepNumber int) (string, bool)
+}
+
+// ghAdapter adapts *gh.Client to ghAPI: only FetchLogs needs wrapping, since its
+// concrete *gh.LogArchive return must be boxed into the logArchive interface.
+type ghAdapter struct{ *gh.Client }
+
+func (g ghAdapter) FetchLogs(ctx context.Context, runID int64) (logArchive, error) {
+	a, err := g.Client.FetchLogs(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
 // Collect resolves the target's failing run and returns the assembled result.
 // A soft miss (no failing run) surfaces as a core.CodeNoFailure error from the
 // gh client; a failed run with no jobs (a workflow-file syntax error) returns a
 // result carrying only run metadata and a Note pointing at html_url. Each gh
 // call is bound to ctx, so an interrupt aborts an in-flight extraction.
 func Collect(ctx context.Context, c *gh.Client, t gh.Target, cfg extract.Config) (*model.Result, error) {
+	return collectFrom(ctx, ghAdapter{c}, t, cfg)
+}
+
+func collectFrom(ctx context.Context, c ghAPI, t gh.Target, cfg extract.Config) (*model.Result, error) {
 	run, err := c.ResolveRun(ctx, t)
 	if err != nil {
 		return nil, err
