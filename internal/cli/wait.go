@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/akira-toriyama/cifail/internal/collect"
@@ -69,10 +70,16 @@ func runWait(cmd *cobra.Command, args []string) error {
 	if waitInterval <= 0 {
 		return core.Usagef("--interval must be positive, got %s", waitInterval)
 	}
-	// GitHub's head_sha run filter matches only the full 40-char sha; a short one
-	// silently returns zero runs, which would read as a false green (no_runs).
-	if waitSHA != "" && !isFullSHA(waitSHA) {
-		return core.Usagef("--sha must be a full 40-character commit sha, got %q (omit --sha to use HEAD)", waitSHA)
+	// GitHub's head_sha run filter matches only the full 40-char LOWERCASE sha: a
+	// short one silently returns zero runs (a false green), and an uppercase one
+	// is likewise unmatched — so validate the length/hex AND canonicalize to
+	// lowercase before the query.
+	if waitSHA != "" {
+		norm, ok := normalizeSHA(waitSHA)
+		if !ok {
+			return core.Usagef("--sha must be a full 40-character commit sha, got %q (omit --sha to use HEAD)", waitSHA)
+		}
+		waitSHA = norm
 	}
 	ctx := cmd.Context()
 
@@ -138,6 +145,17 @@ func (p waitPoller) RunsForSHA(ctx context.Context, sha string) ([]wait.RunState
 
 func (p waitPoller) Excerpts(ctx context.Context, runID int64) (*model.Result, error) {
 	return collect.Collect(ctx, p.c, gh.Target{RunID: runID}, p.cfg)
+}
+
+// normalizeSHA validates s is a full 40-character hex commit sha and returns it
+// lowercased. GitHub's head_sha run filter matches only the lowercase form, so
+// an accepted uppercase sha must be canonicalized or it reads as no_runs — a
+// false green the length check alone wouldn't catch.
+func normalizeSHA(s string) (string, bool) {
+	if !isFullSHA(s) {
+		return "", false
+	}
+	return strings.ToLower(s), true
 }
 
 // isFullSHA reports whether s is a full 40-character hexadecimal commit sha.
