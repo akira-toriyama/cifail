@@ -7,6 +7,7 @@
 package flake
 
 import (
+	"cmp"
 	"fmt"
 
 	"github.com/akira-toriyama/cifail/internal/core"
@@ -62,8 +63,10 @@ type Attempt struct {
 
 // SiblingRun is another workflow run on the SAME head sha as the target.
 type SiblingRun struct {
-	ID         int64
-	Workflow   string
+	ID int64
+	// WorkflowID is matched against the target's — a name match would be a false
+	// signal since two distinct workflows can share a display name.
+	WorkflowID int64
 	Event      string
 	Conclusion string
 	HTMLURL    string
@@ -86,6 +89,9 @@ type Evidence struct {
 	RunID      int64
 	HeadSHA    string
 	HeadBranch string
+	// WorkflowID is the target's workflow identity, matched against each
+	// sibling's; Workflow is its display name, carried only for the output.
+	WorkflowID int64
 	Workflow   string
 	Event      string
 	RunAttempt int
@@ -131,10 +137,11 @@ func Decide(ev Evidence) model.FlakeVerdict {
 			}
 		}
 		// Tier B: a sibling run on the SAME head sha passed it. Require the same
-		// workflow AND event — a push-vs-pull_request pair on one sha can behave
-		// differently (env-gated), so crossing events isn't proof of flakiness.
+		// workflow (by id, not display name — two workflows can share a name) AND
+		// event — a push-vs-pull_request pair on one sha can behave differently
+		// (env-gated), so crossing events isn't proof of flakiness.
 		for _, sib := range ev.Siblings {
-			if sib.Workflow != ev.Workflow || sib.Event != ev.Event {
+			if sib.WorkflowID != ev.WorkflowID || sib.Event != ev.Event {
 				continue
 			}
 			if pj, ok := findPass(sib.Jobs, name); ok {
@@ -144,7 +151,7 @@ func Decide(ev Evidence) model.FlakeVerdict {
 					Detail:       fmt.Sprintf("sibling run %d (%s) passed job %q", sib.ID, sib.Event, name),
 					SiblingRunID: sib.ID,
 					SiblingEvent: sib.Event,
-					HTMLURL:      firstNonEmpty(pj.HTMLURL, sib.HTMLURL),
+					HTMLURL:      cmp.Or(pj.HTMLURL, sib.HTMLURL),
 				})
 				break
 			}
@@ -205,13 +212,6 @@ func findPass(jobs []JobConclusion, name string) (JobConclusion, bool) {
 		}
 	}
 	return JobConclusion{}, false
-}
-
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
 
 // ExitCode maps a verdict to the process exit code. Both real verdicts exit 0 —

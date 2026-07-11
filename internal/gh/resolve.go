@@ -118,6 +118,7 @@ func toRun(r apiRun) model.Run {
 func toRunSummary(r apiRun) RunSummary {
 	return RunSummary{
 		ID:         r.ID,
+		WorkflowID: r.WorkflowID,
 		Name:       r.Name,
 		Status:     r.Status,
 		Conclusion: r.Conclusion,

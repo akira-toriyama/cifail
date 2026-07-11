@@ -29,38 +29,41 @@ func TestDecide(t *testing.T) {
 			wantVerdict: VerdictLikelyFlaky, wantConf: "high", wantEvidTier: tierSameRunPass,
 		},
 		{
-			name: "same-sha sibling pass (same workflow+event) is divergence",
+			name: "same-sha sibling pass (same workflow_id+event) is divergence",
 			ev: Evidence{
-				Workflow: "CI", Event: "push",
+				WorkflowID: 1, Event: "push",
 				TargetJobs: []JobConclusion{job(jobName, "failure")},
-				Siblings:   []SiblingRun{{ID: 7, Workflow: "CI", Event: "push", Conclusion: "success", Jobs: []JobConclusion{job(jobName, "success")}}},
+				Siblings:   []SiblingRun{{ID: 7, WorkflowID: 1, Event: "push", Conclusion: "success", Jobs: []JobConclusion{job(jobName, "success")}}},
 			},
 			wantVerdict: VerdictLikelyFlaky, wantConf: "high", wantEvidTier: tierSameSHASibling,
 		},
 		{
-			name: "sibling with different workflow does not count",
+			// Two workflows can share a display name (e.g. both "CI"); the gate
+			// keys on workflow_id, so a same-named-but-different-id sibling is a
+			// different workflow and NOT same-sha divergence.
+			name: "sibling with different workflow_id (even if same name) does not count",
 			ev: Evidence{
-				Workflow: "CI", Event: "push",
+				WorkflowID: 1, Workflow: "CI", Event: "push",
 				TargetJobs: []JobConclusion{job(jobName, "failure")},
-				Siblings:   []SiblingRun{{ID: 7, Workflow: "Lint", Event: "push", Jobs: []JobConclusion{job(jobName, "success")}}},
+				Siblings:   []SiblingRun{{ID: 7, WorkflowID: 2, Event: "push", Jobs: []JobConclusion{job(jobName, "success")}}},
 			},
 			wantVerdict: VerdictInsufficient, wantConf: "low",
 		},
 		{
 			name: "sibling with different event does not count",
 			ev: Evidence{
-				Workflow: "CI", Event: "push",
+				WorkflowID: 1, Event: "push",
 				TargetJobs: []JobConclusion{job(jobName, "failure")},
-				Siblings:   []SiblingRun{{ID: 7, Workflow: "CI", Event: "pull_request", Jobs: []JobConclusion{job(jobName, "success")}}},
+				Siblings:   []SiblingRun{{ID: 7, WorkflowID: 1, Event: "pull_request", Jobs: []JobConclusion{job(jobName, "success")}}},
 			},
 			wantVerdict: VerdictInsufficient, wantConf: "low",
 		},
 		{
 			name: "matrix name mismatch does not count",
 			ev: Evidence{
-				Workflow: "CI", Event: "push",
+				WorkflowID: 1, Event: "push",
 				TargetJobs: []JobConclusion{job(jobName, "failure")},
-				Siblings:   []SiblingRun{{ID: 7, Workflow: "CI", Event: "push", Jobs: []JobConclusion{job("test (ubuntu-latest, 22)", "success")}}},
+				Siblings:   []SiblingRun{{ID: 7, WorkflowID: 1, Event: "push", Jobs: []JobConclusion{job("test (ubuntu-latest, 22)", "success")}}},
 			},
 			wantVerdict: VerdictInsufficient, wantConf: "low",
 		},
@@ -104,9 +107,9 @@ func TestDecide(t *testing.T) {
 
 func TestDecideSiblingEventRecorded(t *testing.T) {
 	v := Decide(Evidence{
-		Workflow: "CI", Event: "push",
+		WorkflowID: 1, Event: "push",
 		TargetJobs: []JobConclusion{job(jobName, "failure")},
-		Siblings:   []SiblingRun{{ID: 7, Workflow: "CI", Event: "push", Jobs: []JobConclusion{job(jobName, "success")}}},
+		Siblings:   []SiblingRun{{ID: 7, WorkflowID: 1, Event: "push", Jobs: []JobConclusion{job(jobName, "success")}}},
 	})
 	if len(v.Evidence) == 0 || v.Evidence[0].SiblingRunID != 7 || v.Evidence[0].SiblingEvent != "push" {
 		t.Errorf("sibling evidence must record run id and event: %+v", v.Evidence)
