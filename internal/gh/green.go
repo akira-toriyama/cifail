@@ -22,9 +22,5 @@ func (c *Client) LastGreenRun(ctx context.Context, workflowID int64, branch stri
 	if len(list.Runs) == 0 {
 		return RunSummary{}, false, nil
 	}
-	r := list.Runs[0]
-	return RunSummary{
-		ID: r.ID, Name: r.Name, Status: r.Status, Conclusion: r.Conclusion,
-		Event: r.Event, HTMLURL: r.HTMLURL, StartedAt: r.RunStartedAt, HeadSHA: r.HeadSHA,
-	}, true, nil
+	return toRunSummary(list.Runs[0]), true, nil
 }

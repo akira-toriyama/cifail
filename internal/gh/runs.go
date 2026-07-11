@@ -33,10 +33,7 @@ func (c *Client) BranchRuns(ctx context.Context, branch string, perPage int) ([]
 	}
 	out := make([]RunSummary, 0, len(list.Runs))
 	for _, r := range list.Runs {
-		out = append(out, RunSummary{
-			ID: r.ID, Name: r.Name, Status: r.Status, Conclusion: r.Conclusion,
-			Event: r.Event, HTMLURL: r.HTMLURL, StartedAt: r.RunStartedAt, HeadSHA: r.HeadSHA,
-		})
+		out = append(out, toRunSummary(r))
 	}
 	return out, list.TotalCount > len(out), nil
 }
@@ -53,10 +50,7 @@ func (c *Client) RunsForSHA(ctx context.Context, sha string) ([]RunSummary, erro
 			return nil, err
 		}
 		for _, r := range list.Runs {
-			out = append(out, RunSummary{
-				ID: r.ID, Name: r.Name, Status: r.Status, Conclusion: r.Conclusion,
-				Event: r.Event, HTMLURL: r.HTMLURL, StartedAt: r.RunStartedAt, HeadSHA: r.HeadSHA,
-			})
+			out = append(out, toRunSummary(r))
 		}
 		if len(out) >= list.TotalCount || len(list.Runs) == 0 {
 			break

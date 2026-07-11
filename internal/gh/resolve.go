@@ -111,3 +111,19 @@ func toRun(r apiRun) model.Run {
 		HTMLURL:    r.HTMLURL,
 	}
 }
+
+// toRunSummary projects an apiRun onto the RunSummary the wait/flake/delta
+// features consume. Centralizing the mapping keeps the three call sites
+// (BranchRuns, RunsForSHA, LastGreenRun) from drifting field-by-field.
+func toRunSummary(r apiRun) RunSummary {
+	return RunSummary{
+		ID:         r.ID,
+		Name:       r.Name,
+		Status:     r.Status,
+		Conclusion: r.Conclusion,
+		Event:      r.Event,
+		HTMLURL:    r.HTMLURL,
+		StartedAt:  r.RunStartedAt,
+		HeadSHA:    r.HeadSHA,
+	}
+}
