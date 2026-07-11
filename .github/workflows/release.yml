@@ -14,8 +14,26 @@ permissions:
   id-token: write      # keyless signing for provenance attestation
   attestations: write  # write the attestation
 
+# Serialize releases with a CONSTANT group (NOT keyed on the tag ref, which would
+# let two different tags run at once): overlapping runs — a tag plus a manual
+# workflow_dispatch — queue instead of racing the homebrew-tap push. An in-flight
+# publish is never cancelled mid-commit.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  # Gate the release on the shared Go CI (build / vet / race-test / lint) run
+  # against the tagged commit, so a tag that isn't on a green main can't ship.
+  # The reusable declares its own contents:read, so it does not inherit the
+  # release job's write scopes.
+  ci:
+    uses: akira-toriyama/.github/.github/workflows/go-ci.yml@v1
+    with:
+      go-version-file: go.mod
+
   release:
+    needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

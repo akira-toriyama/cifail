@@ -17,7 +17,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: govulncheck-${{ github.event.pull_request.number || github.ref }}
+  # Include the event name so the daily schedule and a push-to-main (both run on
+  # refs/heads/main) land in different groups and don't cancel each other; PR runs
+  # still supersede their own prior runs.
+  group: govulncheck-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
