@@ -75,6 +75,35 @@ func TestRunWaitRejectsShortSHA(t *testing.T) {
 	}
 }
 
+// GitHub's head_sha filter matches only the lowercase sha, so a valid uppercase
+// one must be accepted AND canonicalized — else it silently reads as no_runs.
+func TestNormalizeSHA(t *testing.T) {
+	const lower = "1c27b08e9d3a4f5061728394a5b6c7d8e9f00112"
+	upper := strings.ToUpper(lower)
+	cases := []struct {
+		name   string
+		in     string
+		want   string
+		wantOK bool
+	}{
+		{"lowercase passthrough", lower, lower, true},
+		{"uppercase canonicalized", upper, lower, true},
+		{"mixed case canonicalized", "1C27b08E9d3a4f5061728394a5b6c7d8e9f00112", lower, true},
+		{"short rejected", "1c27b08", "", false},
+		{"too long rejected", lower + "a", "", false},
+		{"non-hex rejected", "z" + lower[1:], "", false},
+		{"empty rejected", "", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := normalizeSHA(tc.in)
+			if ok != tc.wantOK || got != tc.want {
+				t.Errorf("normalizeSHA(%q) = (%q, %v), want (%q, %v)", tc.in, got, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
+}
+
 func TestInterruptOr(t *testing.T) {
 	boom := core.APIf("boom")
 	// Live ctx: the underlying error passes through untouched.
