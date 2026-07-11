@@ -119,6 +119,29 @@ func TestExtractStep_startLinesAre1Based(t *testing.T) {
 	}
 }
 
+func TestExtractStep_emptyLogEmitsEmptyExcerpts(t *testing.T) {
+	// A missing per-step archive leaves Log=="" (collect.go). Excerpts must be a
+	// non-nil empty slice so model.FailedStep.Excerpts (no omitempty) serializes as
+	// [] not null — an agent piping `.excerpts[]` must never hit a null.
+	out := ExtractStep(StepInput{Number: 1, Name: "s", Log: ""}, 8192, Default())
+	if out.Excerpts == nil {
+		t.Errorf("empty log left Excerpts nil; want non-nil empty slice")
+	}
+}
+
+func TestExtractStep_zeroBudgetEmitsEmptyExcerpts(t *testing.T) {
+	// When an earlier step is budgeted last and the budget is already exhausted,
+	// nothing survives and compose() keeps no blocks. Excerpts must still be a
+	// non-nil empty slice, for the same JSON contract as above.
+	out := ExtractStep(StepInput{Number: 1, Name: "s", Log: "a\nb\nc\n"}, 0, Default())
+	if len(out.Excerpts) != 0 {
+		t.Fatalf("zero budget should keep nothing, got %d excerpts", len(out.Excerpts))
+	}
+	if out.Excerpts == nil {
+		t.Errorf("zero-budget step left Excerpts nil; want non-nil empty slice")
+	}
+}
+
 func TestExtract_globalBudgetTailStepFirst(t *testing.T) {
 	// Two failed steps; the LAST one holds the real error. Under a global budget
 	// too small for both in full, the last step's error must survive.

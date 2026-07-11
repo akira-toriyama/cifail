@@ -88,7 +88,7 @@ func Extract(steps []StepInput, cfg Config) ([]StepOutput, model.Budget) {
 func ExtractStep(step StepInput, budget int, cfg Config) StepOutput {
 	lines := splitLog(step.Log)
 	n := len(lines)
-	out := StepOutput{Number: step.Number, Name: step.Name}
+	out := StepOutput{Number: step.Number, Name: step.Name, Excerpts: []model.Excerpt{}}
 	if n == 0 {
 		return out
 	}
@@ -235,7 +235,7 @@ func matchBlocks(lines []string, context int) []block {
 // compose turns the keep set into contiguous excerpt blocks in log order, each
 // tagged with the strongest reason among its lines.
 func compose(lines []string, keep []bool, cat []int) []model.Excerpt {
-	var excerpts []model.Excerpt
+	excerpts := make([]model.Excerpt, 0) // non-nil so a fully-omitted step serializes [] not null
 	i := 0
 	for i < len(lines) {
 		if !keep[i] {
