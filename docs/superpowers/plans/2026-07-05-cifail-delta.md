@@ -1,5 +1,10 @@
 # `cifail delta` Implementation Plan
 
+> **Status:** ✅ Implemented (shipped in b3dbde9). This is a historical execution
+> plan kept for provenance — version/toolchain references below are frozen at
+> authoring time and are not current guidance. The lasting rationale lives in the
+> paired design spec (see **Spec** below).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a `cifail delta` subcommand that reports, in one bounded JSON document, what changed between a failing GitHub Actions run and the last green run of the same workflow+branch — commits, lockfiles, workflow edits, resolved action SHAs, runner image.
