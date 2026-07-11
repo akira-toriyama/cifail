@@ -135,7 +135,7 @@ $ git push && cifail wait --ndjson
  "runs":[{"id":42,"name":"ci","status":"completed","conclusion":"failure",
           "jobs":[{"name":"build","failed_steps":[{"name":"go test",
                    "excerpts":[{"start_line":40,"reason":"match","lines":["--- FAIL ..."]}]}]}]}],
- "budget":{"limit_bytes":16384,"used_bytes":5100,"omitted_lines":40}}
+ "budget":{"limit_bytes":8192,"used_bytes":5100,"omitted_lines":40}}
 ```
 
 Flags: `--repo`, `--sha` (default: HEAD of cwd), `--timeout` (default `30m`),
