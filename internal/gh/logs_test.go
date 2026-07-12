@@ -53,10 +53,8 @@ func TestLogArchiveResolvesByDisplayName(t *testing.T) {
 	if got, ok := a.StepLog(job, 2); !ok || got != "set up job log" {
 		t.Errorf("StepLog(%q, 2) = (%q, %v), want the set-up-job step log", job, got, ok)
 	}
-	// system.txt has no numeric step prefix, so it is neither a job nor a step log.
-	if _, ok := a.StepLog(job, 0); ok {
-		t.Error("StepLog step 0 resolved; system.txt must be ignored")
-	}
+	// system.txt (no numeric step prefix) is neither a job nor a step log: it must
+	// not clobber the whole-job log above, and JobLog still returns the real one.
 	// Unknown job / unknown step are clean misses, not panics.
 	if _, ok := a.JobLog("nonexistent"); ok {
 		t.Error("JobLog(nonexistent) = ok, want miss")

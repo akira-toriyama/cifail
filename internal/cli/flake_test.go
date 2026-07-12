@@ -91,6 +91,44 @@ func TestBuildEvidence(t *testing.T) {
 	}
 }
 
+// End-to-end guard for the workflow_id gate: a same-sha sibling from a DIFFERENT
+// workflow that happens to share the display name must NOT count as divergence.
+// This is the case that FAILS under the old name-matching gate (both named "CI")
+// and passes only when the gate keys on workflow_id.
+func TestBuildEvidenceSiblingMatchedByWorkflowID(t *testing.T) {
+	const failing = "test (ubuntu-latest, 20)"
+	run := model.Run{ID: 1, WorkflowID: 42, HeadSHA: "sha", HeadBranch: "main", Name: "CI", Event: "push", Attempt: 1}
+	f := fakeProber{
+		allJobs: map[int64][]gh.JobResult{
+			1: {{Name: failing, Conclusion: "failure"}},
+			2: {{Name: failing, Conclusion: "success"}}, // the sibling "passed" the failing job
+		},
+		siblings: []gh.RunSummary{
+			// Same display name "CI", DIFFERENT workflow id -> a different workflow.
+			{ID: 2, WorkflowID: 99, Name: "CI", Status: "completed", Conclusion: "success", Event: "push"},
+		},
+	}
+	cfg := flake.Config{MaxSiblings: 10, BranchWindow: 20}
+
+	ev, err := buildEvidence(context.Background(), f, run, cfg)
+	if err != nil {
+		t.Fatalf("buildEvidence: %v", err)
+	}
+	if v := flake.Decide(ev); v.Verdict != flake.VerdictInsufficient {
+		t.Fatalf("verdict = %q, want insufficient — a same-named but different-workflow sibling must not count", v.Verdict)
+	}
+
+	// Same sha, SAME workflow id -> genuine same-workflow divergence -> likely_flaky.
+	f.siblings[0].WorkflowID = 42
+	ev, err = buildEvidence(context.Background(), f, run, cfg)
+	if err != nil {
+		t.Fatalf("buildEvidence: %v", err)
+	}
+	if v := flake.Decide(ev); v.Verdict != flake.VerdictLikelyFlaky {
+		t.Fatalf("verdict = %q, want likely_flaky for a same-workflow-id sibling", v.Verdict)
+	}
+}
+
 func TestBuildEvidenceCapsSiblings(t *testing.T) {
 	run := model.Run{ID: 1, HeadSHA: "sha", HeadBranch: "main", Name: "CI", Event: "push", Attempt: 1}
 	f := fakeProber{
