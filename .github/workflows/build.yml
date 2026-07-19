@@ -18,7 +18,7 @@ jobs:
   # SHA-pinned once in the hub. go.mod carries a `toolchain` line, so gotoolchain is
   # left unset — setup-go honors and pins it (see the reusable's header footgun note).
   ci:
-    uses: akira-toriyama/.github/.github/workflows/go-ci.yml@v1
+    uses: akira-toriyama/.github/.github/workflows/go-ci.yml@v1.2.0
     with:
       go-version-file: go.mod
 
