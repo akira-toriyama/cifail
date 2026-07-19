@@ -68,9 +68,9 @@ The pure `extract`/`model`/`wait` packages take ctx but still do no IO.
 
 ## Conventions
 
-- **Commits**: gitmoji + Conventional Commits; the Conventional *type* drives the
-  release (feat→minor, fix/perf→patch, `!`/BREAKING→major, docs/chore→no bump).
-  Subject and body in English. See
+- **Commits**: gitmoji-driven; the leading `:code:` is the type and drives the
+  release semver (`:sparkles:`→minor, `:bug:`/`:zap:`→patch, `:boom:`/`!`→major,
+  `:memo:`/`:wrench:`→no bump). Subject and body in English. See
   <https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md>.
 - **Go**: the go.mod floor is a supported minor (never an EOL pin); CI resolves
   the toolchain via `go-version-file: go.mod`. Run `sh scripts/check.sh` before a
@@ -84,7 +84,8 @@ The pure `extract`/`model`/`wait` packages take ctx but still do no IO.
 
 ## Release
 
-Tag-driven: push `vX.Y.Z` → `release.yml` runs git-cliff + GoReleaser (binaries,
-checksums, Homebrew cask to `akira-toriyama/homebrew-tap`) and attaches a build
-provenance attestation. Version/commit/date are stamped via ldflags; a
+Tag-driven: compute the next tag with `glyph bump --since-tag`, then push
+`vX.Y.Z` → `release.yml` renders the notes with `glyph notes` and runs GoReleaser
+(binaries, checksums, Homebrew cask to `akira-toriyama/homebrew-tap`) and
+attaches a build provenance attestation. Version/commit/date are stamped via ldflags; a
 source/nix build reports `dev` + the commit (never a hardcoded release string).
