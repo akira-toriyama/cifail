@@ -27,7 +27,7 @@ jobs:
   # against the tagged commit, so a tag that isn't on a green main can't ship.
   # The reusable declares its own contents:read.
   ci:
-    uses: akira-toriyama/.github/.github/workflows/go-ci.yml@v1
+    uses: akira-toriyama/.github/.github/workflows/go-ci.yml@v2
     with:
       go-version-file: go.mod
 
