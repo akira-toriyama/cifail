@@ -7,7 +7,6 @@ import (
 	"github.com/akira-toriyama/cifail/internal/model"
 )
 
-// apiStep is one step within a job.
 type apiStep struct {
 	Number     int    `json:"number"`
 	Name       string `json:"name"`
@@ -93,7 +92,6 @@ func (c *Client) fetchAllJobs(ctx context.Context, endpoint string) ([]apiJob, e
 	return jobs, nil
 }
 
-// listJobs paginates a jobs endpoint and returns every job's name/conclusion/url.
 func (c *Client) listJobs(ctx context.Context, endpoint string) ([]JobResult, error) {
 	jobs, err := c.fetchAllJobs(ctx, endpoint)
 	if err != nil {

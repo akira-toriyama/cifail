@@ -42,7 +42,6 @@ func (c *Client) FetchLogs(ctx context.Context, runID int64) (*LogArchive, error
 	return parseLogZip(b)
 }
 
-// parseLogZip builds the job/step log index from raw zip bytes.
 func parseLogZip(b []byte) (*LogArchive, error) {
 	zr, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
 	if err != nil {

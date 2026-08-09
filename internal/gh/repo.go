@@ -26,7 +26,6 @@ func ResolveRepo(ctx context.Context, spec, dir string) (owner, repo string, err
 	return owner, repo, nil
 }
 
-// parseRepoSpec splits an "owner/repo" string.
 func parseRepoSpec(spec string) (string, string, error) {
 	spec = strings.TrimSuffix(strings.TrimSpace(spec), ".git")
 	parts := strings.Split(spec, "/")
@@ -41,7 +40,6 @@ func parseRepoSpec(spec string) (string, string, error) {
 // ssh://git@github.com/owner/repo(.git).
 var remoteURLRe = regexp.MustCompile(`(?:github\.com[:/])([^/]+)/(.+?)(?:\.git)?/?$`)
 
-// parseRemoteURL extracts owner/repo from a GitHub remote URL.
 func parseRemoteURL(url string) (owner, repo string, ok bool) {
 	m := remoteURLRe.FindStringSubmatch(strings.TrimSpace(url))
 	if m == nil {

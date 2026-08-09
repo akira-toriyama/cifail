@@ -158,7 +158,6 @@ func normalizeSHA(s string) (string, bool) {
 	return strings.ToLower(s), true
 }
 
-// isFullSHA reports whether s is a full 40-character hexadecimal commit sha.
 func isFullSHA(s string) bool {
 	if len(s) != 40 {
 		return false

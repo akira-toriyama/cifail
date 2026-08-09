@@ -151,7 +151,6 @@ func TestBuildEvidenceCapsSiblings(t *testing.T) {
 	}
 }
 
-// fakeProber is an in-memory flakeProber for buildEvidence tests.
 type fakeProber struct {
 	allJobs      map[int64][]gh.JobResult
 	attemptJobs  map[string][]gh.JobResult // key "runID/attempt"

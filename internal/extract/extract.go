@@ -23,8 +23,6 @@ type Config struct {
 	Floor       int // minimum head/tail lines reserved before errors compete for budget
 }
 
-// Default is the standard extraction profile: an 8 KiB budget with modest
-// context and head/tail anchors.
 func Default() Config {
 	return Config{BudgetBytes: 8192, Context: 3, Head: 8, Tail: 12, Floor: 3}
 }

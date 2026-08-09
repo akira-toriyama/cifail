@@ -18,7 +18,6 @@ type Config struct {
 	BudgetBytes int
 }
 
-// Default returns the standard budget.
 func Default() Config {
 	return Config{BudgetBytes: DefaultBudgetBytes}
 }
