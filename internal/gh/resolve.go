@@ -80,8 +80,6 @@ func (c *Client) ResolveRun(ctx context.Context, t Target) (model.Run, error) {
 	}
 }
 
-// latestFailure queries the run list with the given filter and returns the
-// newest run whose conclusion is failure.
 func (c *Client) latestFailure(ctx context.Context, filter url.Values, desc string) (model.Run, error) {
 	filter.Set("per_page", "30")
 	var list apiRunList

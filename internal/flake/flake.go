@@ -41,7 +41,6 @@ const (
 	DefaultBranchWindow = 20
 )
 
-// Default returns the standard survey breadth.
 func Default() Config {
 	return Config{MaxSiblings: DefaultMaxSiblings, BranchWindow: DefaultBranchWindow}
 }
@@ -203,8 +202,6 @@ func Decide(ev Evidence) model.FlakeVerdict {
 	return v
 }
 
-// findPass returns the first job in jobs with the given name that concluded
-// success.
 func findPass(jobs []JobConclusion, name string) (JobConclusion, bool) {
 	for _, j := range jobs {
 		if j.Name == name && j.Conclusion == "success" {

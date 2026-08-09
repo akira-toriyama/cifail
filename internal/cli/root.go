@@ -19,7 +19,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// run flags
 var (
 	flagRepo    string
 	flagPR      int

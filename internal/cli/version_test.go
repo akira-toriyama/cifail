@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// captureOut runs fn with the package stdout writer redirected to a buffer and
-// returns what was written.
 func captureOut(t *testing.T, fn func()) string {
 	t.Helper()
 	var buf bytes.Buffer

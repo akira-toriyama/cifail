@@ -85,7 +85,6 @@ func (c *Client) newRequest(ctx context.Context, pathOrURL string) (*http.Reques
 	return req, nil
 }
 
-// getJSON GETs an API path and decodes the JSON body into v.
 func (c *Client) getJSON(ctx context.Context, path string, v any) error {
 	req, err := c.newRequest(ctx, path)
 	if err != nil {
@@ -145,8 +144,6 @@ func (c *Client) statusError(path string, resp *http.Response) error {
 	}
 }
 
-// path builds a repo-scoped API path: repoPath("/actions/runs") ->
-// "/repos/<owner>/<repo>/actions/runs".
 func (c *Client) repoPath(suffix string) string {
 	return fmt.Sprintf("/repos/%s/%s%s", c.Owner, c.Repo, suffix)
 }

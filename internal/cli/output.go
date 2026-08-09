@@ -35,7 +35,6 @@ func printPretty(v any) {
 	fmt.Fprintln(out, string(marshal(v, true)))
 }
 
-// printCompact writes v as one JSON line.
 func printCompact(v any) {
 	fmt.Fprintln(out, string(marshal(v, false)))
 }
