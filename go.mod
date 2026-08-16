@@ -6,7 +6,7 @@ module github.com/akira-toriyama/cifail
 // setup-go skip the toolchain line and install the bare floor instead.
 go 1.25.0
 
-toolchain go1.26.5
+toolchain go1.26.6
 
 require github.com/spf13/cobra v1.10.2
 
