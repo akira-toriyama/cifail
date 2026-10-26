@@ -4,9 +4,9 @@ module github.com/akira-toriyama/cifail
 // toolchain. CI leaves GOTOOLCHAIN unset so setup-go reads this file, honors the
 // `toolchain` line and pins it; a job-level GOTOOLCHAIN=local up front would make
 // setup-go skip the toolchain line and install the bare floor instead.
-go 1.25.0
+go 1.26.0
 
-toolchain go1.26.6
+toolchain go1.26.10
 
 require github.com/spf13/cobra v1.10.2
 
